@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 
 @Injectable()
 export class MediaLoaderConfig {
-  debugMode = false;
+  debugMode = true;
 
   spinnerEnabled = true;
 
@@ -35,13 +35,11 @@ export class MediaLoaderConfig {
 
   httpHeaders: HttpHeaders;
 
-  fileNameCachedWithExtension = false;
-
   fallbackFileNameCachedExtension = '.jpg';
 
   cacheDirectoryType: 'cache' | 'data' = 'cache';
 
-  private _cacheDirectoryName: string = 'image-loader-cache';
+  private _cacheDirectoryName: string = 'ionic-media-loader';
 
 
   get cacheDirectoryName() {
@@ -199,14 +197,6 @@ export class MediaLoaderConfig {
     [key: string]: any;
   }): void {
     // do nothing, plugin deprecated.
-  }
-
-  /**
-   * Enable/Disable the save filename of cached images with extension.  Defaults to false.
-   * @param {boolean} enable set to true to enable
-   */
-  setFileNameCachedWithExtension(enable: boolean) {
-    this.fileNameCachedWithExtension = enable;
   }
 
   /**

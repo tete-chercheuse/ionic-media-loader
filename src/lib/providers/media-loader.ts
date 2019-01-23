@@ -1,6 +1,5 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Platform } from '@ionic/angular';
 import { MediaLoaderConfig } from './media-loader-config';
 
 import { FilesystemDirectory, Plugins } from '@capacitor/core';
@@ -65,7 +64,6 @@ export class MediaLoader {
   constructor(
     private config: MediaLoaderConfig,
     private http: HttpClient,
-    private platform: Platform,
   ) {
 
     this.file = Filesystem;
@@ -79,8 +77,8 @@ export class MediaLoader {
         // we are running on a browser, or using livereload
         // plugin will not function in this case
         this.isInit = true;
-        this.throwWarning(
-          'You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.',
+        console.error(
+          'ImageLoader Error: You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.'
         );
       } else {
         this.initCache();
@@ -99,6 +97,7 @@ export class MediaLoader {
    * @returns {Promise<string>} returns a promise that resolves with the cached image URL
    */
   preload(imageUrl: string): Promise<string> {
+    this.getImagePath(imageUrl).then(url => console.log(url));
     return this.getImagePath(imageUrl);
   }
 
@@ -140,20 +139,33 @@ export class MediaLoader {
    */
   checkDir(path: string, dir: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      this.file.stat({
+      this.file.readdir({
         path: path,
         directory: dir
       })
-        .then(file => resolve(file.uri))
-        .catch(e => reject(e))
+        .then(files => resolve(files))
+        .catch(() => {
+          this.file.readFile({
+            path: path,
+            directory: dir
+          })
+            .then(() => {
+              this.file.getUri({
+                path: path,
+                directory: dir
+              })
+                .then(file => resolve(file.uri));
+            })
+            .catch(e => {
+              console.error("file or dir does not exists.")
+              reject(e)
+            })
+        })
     })
   }
 
   getFileCacheDirectory() {
-    if(this.config.cacheDirectoryType == 'data') {
-      return FilesystemDirectory.Data;
-    }
-    return FilesystemDirectory.Cache;
+    return FilesystemDirectory.Documents;
   }
 
   /**
@@ -178,7 +190,7 @@ export class MediaLoader {
       }).then(() => {
         this.initCache(true);
       }).catch((err) => {
-        this.throwError.bind(this);
+        console.error('Failed to reinit cache after delete the file...');
       });
     }
     clear();
@@ -207,7 +219,7 @@ export class MediaLoader {
         this.initCache(true);
       })
         .catch((e) => {
-          this.throwError.bind(this);
+          console.error('ImageLoader Error: Failed to delete folder.');
         });
     }
 
@@ -225,15 +237,25 @@ export class MediaLoader {
     if(typeof imageUrl !== 'string' || imageUrl.length <= 0) {
       return Promise.reject('The image url provided was empty or invalid.');
     }
-
     return new Promise<string>((resolve, reject) => {
-
+      if(this.config.debugMode) {
+        console.log("Starting operating");
+      }
       const getImage = () => {
         if(this.isImageUrlRelative(imageUrl)) {
+          if(this.config.debugMode) {
+            console.log("Pic stored");
+          }
           resolve(imageUrl);
         } else {
+          if(this.config.debugMode) {
+            console.log("New pic");
+          }
           this.getCachedImagePath(imageUrl)
-            .then(uri => resolve(uri))
+            .then(uri => {
+              //let uril = uri.substr(4);
+              resolve(uri)
+            })
             .catch(() => {
               // image doesn't exist in cache, lets fetch it and save it
               this.addItemToQueue(imageUrl, resolve, reject);
@@ -246,12 +268,15 @@ export class MediaLoader {
           if(this.isCacheReady) {
             getImage();
           } else {
-            this.throwWarning(
-              'The cache system is not running. Images will be loaded by your browser instead.',
+            console.error(
+              'ImageLoader Error: The cache system is not running. Images will be loaded by your browser instead.'
             );
             resolve(imageUrl);
           }
         } else {
+          if(this.config.debugMode) {
+            console.error("Waiting for the env to be ready (cache + folder)...")
+          }
           setTimeout(() => check(), 250);
         }
       };
@@ -329,7 +354,7 @@ export class MediaLoader {
 
     const error = (e) => {
       currentItem.reject();
-      this.throwError(e);
+      console.error('ImageLoader Error: ' + e);
       done();
     };
 
@@ -407,16 +432,22 @@ export class MediaLoader {
    */
   private initCache(replace?: boolean): void {
     this.concurrency = this.config.concurrency;
-
+    if(this.config.debugMode) {
+      console.log("Initializing cache...")
+    }
     // create cache directories if they do not exist
     this.createCacheDirectory(replace)
-      .catch(e => {
-        this.throwError(e);
-        this.isInit = true;
+      .then(() => {
+        this.indexCache();
       })
-      .then(() => this.indexCache())
       .then(() => {
         this.isCacheReady = true;
+        this.isInit = true;
+      })
+      .catch((e) => {
+        if(this.config.debugMode) {
+        console.error('Cannot create storage directory.');
+        }
         this.isInit = true;
       });
   }
@@ -466,22 +497,41 @@ export class MediaLoader {
    */
   private indexCache(): Promise<void> {
     this.cacheIndex = [];
-
+    if(this.config.debugMode) {
+      console.log("Cache created. Indexing it...");
+    }
     return this.file.readdir({
       path: this.config.cacheDirectoryName,
       directory: this.getFileCacheDirectory()
     })
-      .then(files => Promise.all(files.map(this.addFileToIndex.bind(this))))
+      .then(files => {
+        if(files.length !== 0) {
+          if(this.config.debugMode){
+            console.log("Folder not empty, adding content to the index...")
+          }
+          files.map((e) => console.log(e));
+          let promises = files.map(this.addFileToIndex, this)
+          Promise.all(promises)
+        }
+      })
       .then(() => {
         // Sort items by date. Most recent to oldest.
+        if(this.config.debugMode){
+          console.log("Attempting to sort items in storage folder by date...")
+        }
         this.cacheIndex = this.cacheIndex.sort(
           (a: IndexItem, b: IndexItem): number => (a > b ? -1 : a < b ? 1 : 0),
         );
         this.indexed = true;
+        if(this.config.debugMode) {
+          console.log("Cache indexed.")
+        }
         return Promise.resolve();
       })
       .catch(e => {
-        this.throwError(e);
+        if(this.config.debugMode) {
+          console.error("Cannot index cache.")
+        }
         return Promise.resolve();
       });
   }
@@ -529,28 +579,40 @@ export class MediaLoader {
    */
   private getCachedImagePath(url: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      // make sure cache is ready
-      if(!this.isCacheReady) {
-        return reject();
+        // make sure cache is ready
+        if(!this.isCacheReady) {
+          return reject();
+        }
+
+        // if we're running with livereload, ignore cache and call the resource from it's URL
+        if(this.isWeb) {
+          return resolve(url);
+        }
+
+        // get file name
+        const fileName = this.config.cacheDirectoryName + '/' + this.createFileName(url);
+
+        // get full path
+        const dirPath = this.getFileCacheDirectory();
+
+        // check if exists
+        this.checkDir(fileName, dirPath)
+          .then((uri) => {
+            if(this.config.debugMode){
+              console.log("File exists in storage, returning it uri.")
+            }
+
+            resolve(uri)
+          })
+          .catch(() => {
+            if(this.config.debugMode){
+              console.log("File doesn't exist, go process it in queue.")
+            }
+            reject()
+          });
+
       }
-
-      // if we're running with livereload, ignore cache and call the resource from it's URL
-      if(this.isWeb) {
-        return resolve(url);
-      }
-
-      // get file name
-      const fileName = this.config.cacheDirectoryName + '/' + this.createFileName(url);
-
-      // get full path
-      const dirPath = this.getFileCacheDirectory();
-
-      // check if exists
-
-      this.checkDir(dirPath, fileName)
-        .then(uri => resolve(uri))
-        .catch(e => reject(e));
-    });
+    );
   }
 
   /**
@@ -560,33 +622,62 @@ export class MediaLoader {
    */
   private createCacheDirectory(replace: boolean = false): Promise<any> {
     return new Promise<any>((resolve, reject) => {
+      if (this.config.debugMode) {
+        console.log("Checking storage directory status...");
+      }
       if(replace) {
+        if(this.config.debugMode){
+          console.log("Attempting to delete previous directory")
+        }
         this.file.rmdir({
           path: this.config.cacheDirectoryName,
           directory: this.getFileCacheDirectory()
         })
           .then(() => {
+            if(this.config.debugMode){
+              console.log("Deleting done. Attempting to create new one...")
+            }
             this.file.mkdir({
               path: this.config.cacheDirectoryName,
               directory: this.getFileCacheDirectory(),
               createIntermediateDirectories: false
             })
-              .then(dir => resolve(dir))
-              .catch(e => reject(e))
+              .then(() => {
+                if(this.config.debugMode) {
+                  console.log("Creating done.")
+                }
+                resolve()
+              })
+              .catch((e) => {
+                console.error("Cannot create directory (replace case).")
+                reject(e)
+              })
           })
-          .catch(e => reject(e))
+          .catch((e) => {
+            console.error("Cannot delete directory (replace case).")
+            reject(e)
+          })
       } else {
         // check if the cache directory exists.
         // if it does not exist create it!
-        this.checkDir(this.getFileCacheDirectory(), this.config.cacheDirectoryName)
+        this.checkDir(this.config.cacheDirectoryName, this.getFileCacheDirectory())
+          .then(() => {
+            if(this.config.debugMode){
+              console.log("Directory already exists, nothing more to do.")
+            }
+            resolve()
+          })
           .catch(() => {
             this.file.mkdir({
               path: this.config.cacheDirectoryName,
               directory: this.getFileCacheDirectory(),
-              createIntermediateDirectories: false
+              createIntermediateDirectories: true
             })
-              .then(dir => resolve(dir))
-
+              .then(resolve())
+              .catch((e) => {
+                console.error("Cannot create directory.")
+                reject(e);
+              });
           });
       }
     })
@@ -600,10 +691,7 @@ export class MediaLoader {
   private createFileName(url: string): string {
     // hash the url to get a unique file name
     return (
-      this.hashString(url).toString() +
-      (this.config.fileNameCachedWithExtension
-        ? this.getExtensionFromUrl(url)
-        : '')
+      this.hashString(url).toString() + this.getExtensionFromUrl(url)
     );
   }
 
@@ -640,28 +728,5 @@ export class MediaLoader {
       urlWitoutParams.substr((~-urlWitoutParams.lastIndexOf('.') >>> 0) + 1) ||
       this.config.fallbackFileNameCachedExtension
     );
-  }
-
-
-  /**
-   * Throws a console error if debug mode is enabled
-   * @param {any[]} args Error message
-   */
-  private throwError(...args: any[]): void {
-    if(this.config.debugMode) {
-      args.unshift('ImageLoader Error: ');
-      console.error.apply(console, args);
-    }
-  }
-
-  /**
-   * Throws a console warning if debug mode is enabled
-   * @param {any[]} args Error message
-   */
-  private throwWarning(...args: any[]): void {
-    if(this.config.debugMode) {
-      args.unshift('ImageLoader Warning: ');
-      console.warn.apply(console, args);
-    }
   }
 }

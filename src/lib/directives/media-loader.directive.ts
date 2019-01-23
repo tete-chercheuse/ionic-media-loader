@@ -34,7 +34,6 @@ export class MediaLoaderDirective implements OnInit {
     if(this.isImg || !this.isVideo || !this.isSource) {
 
       this.setSrc(this.element, 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
-
       this.mediaLoader.preload(this.targetSource)
         .then((imageUrl: string) => {
 
