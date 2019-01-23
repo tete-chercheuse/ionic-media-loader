@@ -1,8 +1,10 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { MediaLoaderConfig } from './media-loader-config';
+import { File, FileEntry, FileError, DirectoryEntry } from '@ionic-native/file/ngx';
+import { FileTransfer, FileTransferObject } from '@ionic-native/file-transfer/ngx';
+import { Platform } from '@ionic/angular';
 
-import { FilesystemDirectory, Plugins } from '@capacitor/core';
+import { Plugins } from '@capacitor/core';
+
 
 interface IndexItem {
   name: string;
@@ -16,57 +18,83 @@ interface QueueItem {
   reject: Function;
 }
 
-declare const Ionic: any;
-const { Filesystem, Device } = Plugins;
+const { Device } = Plugins;
 
 @Injectable()
 export class MediaLoader {
+
+  get nativeAvailable(): boolean {
+    return File.installed() && FileTransfer.installed();
+  }
+
   /**
    * Indicates if the cache service is ready.
    * When the cache service isn't ready, images are loaded via browser instead.
    * @type {boolean}
    */
-  private isCacheReady = false;
+  private isCacheReady: boolean = false;
+
   /**
    * Indicates if this service is initialized.
    * This service is initialized once all the setup is done.
    * @type {boolean}
    */
-  private isInit = false;
-  /**
-   * Indicates if this service is initialized.
-   * This service is initialized once all the setup is done.
-   * @type {boolean}
-   */
-  private isWeb = false;
+  private isInit: boolean = false;
+
   /**
    * Number of concurrent requests allowed
    * @type {number}
    */
-  private concurrency = 5;
+  private concurrency: number = 5;
+
+  public config = {
+
+    debugMode: true,
+    concurrency: 5,
+    maxCacheSize: -1,
+    maxCacheAge: -1,
+    fallbackFileNameCachedExtension: '.jpg',
+    imageReturnType: 'uri',
+    cacheDirectoryName: 'ionic-media-loader',
+    fileTransferOptions: {
+      trustAllHosts: false
+    }
+  }
+
   /**
    * Queue items
    * @type {Array}
    */
   private queue: QueueItem[] = [];
-  private processing = 0;
-  /**
-   * Fast accessible Object for currently processing items
-   */
-  private currentlyProcessing: { [index: string]: Promise<any> } = {};
-  private cacheIndex: IndexItem[] = [];
-  private currentCacheSize = 0;
-  private indexed = false;
 
-  private file: any;
+  private transferInstances: FileTransferObject[] = [];
+
+  private processing: number = 0;
+
+  private cacheIndex: IndexItem[] = [];
+
+  private currentCacheSize: number = 0;
+
+  private indexed: boolean = false;
+
   private device: any;
 
-  constructor(
-    private config: MediaLoaderConfig,
-    private http: HttpClient,
-  ) {
+  private isWeb: boolean = false;
 
-    this.file = Filesystem;
+  private get shouldIndex(): boolean {
+    return (this.config.maxCacheAge > -1) || (this.config.maxCacheSize > -1);
+  }
+
+  private get isWKWebView(): boolean {
+    return this.platform.is('ios') && (<any>window).webkit && (<any>window).webkit.messageHandlers;
+  }
+
+  private get isIonicWKWebView(): boolean {
+    return this.isWKWebView && (location.host === 'localhost:8080' || (<any>window).LiveReload);
+  }
+
+  constructor(private file: File, private fileTransfer: FileTransfer, private platform: Platform) {
+
     this.device = Device;
 
     this.defineIsWeb().then(isWeb => {
@@ -77,13 +105,22 @@ export class MediaLoader {
         // we are running on a browser, or using livereload
         // plugin will not function in this case
         this.isInit = true;
-        console.error(
-          'ImageLoader Error: You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.'
-        );
+        if(this.config.debugMode === true) {
+          console.error('ImageLoader Error: You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
+        }
       } else {
-        this.initCache();
+        if(this.nativeAvailable) {
+          this.initCache();
+        } else {
+          // we are running on a browser, or using livereload
+          // plugin will not function in this case
+          this.isInit = true;
+          if(this.config.debugMode === true) {
+            console.error('ImageLoader Error: You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
+          }
+        }
       }
-    });
+    })
   }
 
   async defineIsWeb(): Promise<boolean> {
@@ -93,114 +130,22 @@ export class MediaLoader {
 
   /**
    * Preload an image
-   * @param {string} imageUrl Image URL
+   * @param imageUrl {string} Image URL
    * @returns {Promise<string>} returns a promise that resolves with the cached image URL
    */
   preload(imageUrl: string): Promise<string> {
-    this.getImagePath(imageUrl).then(url => console.log(url));
     return this.getImagePath(imageUrl);
-  }
-
-  /**
-   * Copy a file in various methods. If file exists, will fail to copy.
-   *
-   * @param {string} path Base FileSystem. Please refer to the iOS and Android filesystem above
-   * @param {string} fileName Name of file to copy
-   * @param {string} newPath Base FileSystem of new location
-   * @param {string} newFileName New name of file to copy to (leave blank to remain the same)
-   * @returns {Promise<Entry>} Returns a Promise that resolves to an Entry or rejects with an error.
-   */
-  copyFile(path: string, fileName: string, newPath: string, newFileName: string): Promise<any> {
-
-    return new Promise<any>((resolve, reject) => {
-      this.file.readFile({
-        path: fileName,
-        directory: path
-      })
-        .then((content) => {
-          this.file.writeFile({
-            path: newFileName,
-            directory: newPath,
-            data: content
-          })
-            .then(write => resolve(write))
-            .catch(reject)
-        })
-        .catch(reject)
-    })
-  }
-
-  /**
-   * Check if a directory exists in a certain path, directory.
-   *
-   * @param {string} path Base FileSystem. Please refer to the iOS and Android filesystem above
-   * @param {string} dir Name of directory to check
-   * @returns {Promise<boolean>} Returns a Promise that resolves to true if the directory exists or rejects with an error.
-   */
-  checkDir(path: string, dir: string): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
-      this.file.readdir({
-        path: path,
-        directory: dir
-      })
-        .then(files => resolve(files))
-        .catch(() => {
-          this.file.readFile({
-            path: path,
-            directory: dir
-          })
-            .then(() => {
-              this.file.getUri({
-                path: path,
-                directory: dir
-              })
-                .then(file => resolve(file.uri));
-            })
-            .catch(e => {
-              console.error("file or dir does not exists.")
-              reject(e)
-            })
-        })
-    })
-  }
-
-  getFileCacheDirectory() {
-    return FilesystemDirectory.Documents;
-  }
-
-  /**
-   * Clears cache of a single image
-   * @param {string} imageUrl Image URL
-   */
-  clearImageCache(imageUrl: string): void {
-    const clear = () => {
-      if(!this.isInit) {
-        // do not run this method until our service is initialized
-        setTimeout(clear.bind(this), 500);
-        return;
-      }
-      const fileName = this.config.cacheDirectoryName + '/' + this.createFileName(imageUrl);
-      const route = this.getFileCacheDirectory();
-      // pause any operations
-      this.isInit = false;
-
-      this.file.deleteFile({
-        path: fileName,
-        directory: route
-      }).then(() => {
-        this.initCache(true);
-      }).catch((err) => {
-        console.error('Failed to reinit cache after delete the file...');
-      });
-    }
-    clear();
   }
 
   /**
    * Clears the cache
    */
   clearCache(): void {
+
+    if(this.isWeb) return;
+
     const clear = () => {
+
       if(!this.isInit) {
         // do not run this method until our service is initialized
         setTimeout(clear.bind(this), 500);
@@ -209,27 +154,39 @@ export class MediaLoader {
 
       // pause any operations
       this.isInit = false;
-      const path = this.config.cacheDirectoryName;
-      const dirName = this.getFileCacheDirectory();
 
-      this.file.rmdir({
-        path: path,
-        directory: dirName
-      }).then(() => {
-        this.initCache(true);
-      })
-        .catch((e) => {
-          console.error('ImageLoader Error: Failed to delete folder.');
-        });
-    }
+      this.file.removeRecursively(this.file.cacheDirectory, this.config.cacheDirectoryName)
+        .then(() => {
+          if(this.isWKWebView && !this.isIonicWKWebView) {
+
+            // also clear the temp files
+            this.file.removeRecursively(this.file.tempDirectory, this.config.cacheDirectoryName)
+              .catch((error) => {
+                // Noop catch. Removing the tempDirectory might fail,
+                // as it is not persistent.
+              })
+              .then(() => {
+                this.initCache(true);
+              });
+
+          } else {
+
+            this.initCache(true);
+
+          }
+        })
+        .catch(this.throwError.bind(this));
+
+    };
 
     clear();
+
   }
 
   /**
    * Gets the filesystem path of an image.
    * This will return the remote path if anything goes wrong or if the cache service isn't ready yet.
-   * @param {string} imageUrl The remote URL of the image
+   * @param imageUrl {string} The remote URL of the image
    * @returns {Promise<string>} Returns a promise that will always resolve with an image URL
    */
   getImagePath(imageUrl: string): Promise<string> {
@@ -237,30 +194,17 @@ export class MediaLoader {
     if(typeof imageUrl !== 'string' || imageUrl.length <= 0) {
       return Promise.reject('The image url provided was empty or invalid.');
     }
+
     return new Promise<string>((resolve, reject) => {
-      if(this.config.debugMode) {
-        console.log("Starting operating");
-      }
+
       const getImage = () => {
-        if(this.isImageUrlRelative(imageUrl)) {
-          if(this.config.debugMode) {
-            console.log("Pic stored");
-          }
-          resolve(imageUrl);
-        } else {
-          if(this.config.debugMode) {
-            console.log("New pic");
-          }
-          this.getCachedImagePath(imageUrl)
-            .then(uri => {
-              //let uril = uri.substr(4);
-              resolve(uri)
-            })
-            .catch(() => {
-              // image doesn't exist in cache, lets fetch it and save it
-              this.addItemToQueue(imageUrl, resolve, reject);
-            });
-        }
+        this.getCachedImagePath(imageUrl)
+          .then(resolve)
+          .catch(() => {
+            // image doesn't exist in cache, lets fetch it and save it
+            this.addItemToQueue(imageUrl, resolve, reject);
+          });
+
       };
 
       const check = () => {
@@ -268,28 +212,36 @@ export class MediaLoader {
           if(this.isCacheReady) {
             getImage();
           } else {
-            console.error(
-              'ImageLoader Error: The cache system is not running. Images will be loaded by your browser instead.'
-            );
+            this.throwWarning('The cache system is not running. Images will be loaded by your browser instead.');
             resolve(imageUrl);
           }
         } else {
-          if(this.config.debugMode) {
-            console.error("Waiting for the env to be ready (cache + folder)...")
-          }
           setTimeout(() => check(), 250);
         }
       };
 
       check();
+
     });
+
   }
 
-  private get isCacheSpaceExceeded(): boolean {
-    return (
-      this.config.maxCacheSize > -1 &&
-      this.currentCacheSize > this.config.maxCacheSize
-    );
+  /**
+   * Add an item to the queue
+   * @param imageUrl
+   * @param resolve
+   * @param reject
+   */
+  private addItemToQueue(imageUrl: string, resolve, reject): void {
+
+    this.queue.push({
+      imageUrl,
+      resolve,
+      reject
+    });
+
+    this.processQueue();
+
   }
 
   /**
@@ -297,41 +249,19 @@ export class MediaLoader {
    * @returns {boolean}
    */
   private get canProcess(): boolean {
-    return this.queue.length > 0 && this.processing < this.concurrency;
-  }
-
-  /**
-   * Returns if an imageUrl is an relative path
-   * @param {string} imageUrl
-   */
-  private isImageUrlRelative(imageUrl: string) {
-    return !/^(https?|file):\/\/\/?/i.test(imageUrl);
-  }
-
-  /**
-   * Add an item to the queue
-   * @param {string} imageUrl
-   * @param resolve
-   * @param reject
-   */
-  private addItemToQueue(imageUrl: string, resolve, reject): void {
-    this.queue.push({
-      imageUrl,
-      resolve,
-      reject,
-    });
-
-    this.processQueue();
+    return (
+      this.queue.length > 0
+      && this.processing < this.concurrency
+    );
   }
 
   /**
    * Processes one item from the queue
    */
   private processQueue() {
+
     // make sure we can process items first
-    if(!this.canProcess) {
-      return;
-    }
+    if(!this.canProcess) return;
 
     // increase the processing number
     this.processing++;
@@ -339,199 +269,127 @@ export class MediaLoader {
     // take the first item from queue
     const currentItem: QueueItem = this.queue.splice(0, 1)[0];
 
+    // create FileTransferObject instance if needed
+    // we would only reach here if current jobs < concurrency limit
+    // so, there's no need to check anything other than the length of
+    // the FileTransferObject instances we have in memory
+    if(this.transferInstances.length === 0) {
+      this.transferInstances.push(this.fileTransfer.create());
+    }
+
+    const transfer: FileTransferObject = this.transferInstances.splice(0, 1)[0];
+
+    // process more items concurrently if we can
+    if(this.canProcess) this.processQueue();
+
     // function to call when done processing this item
     // this will reduce the processing number
     // then will execute this function again to process any remaining items
     const done = () => {
       this.processing--;
+      this.transferInstances.push(transfer);
       this.processQueue();
-
-      // only delete if it's the last/unique occurrence in the queue
-      if(this.currentlyProcessing[currentItem.imageUrl] !== undefined && !this.currentlyInQueue(currentItem.imageUrl)) {
-        delete this.currentlyProcessing[currentItem.imageUrl];
-      }
     };
 
-    const error = (e) => {
-      currentItem.reject();
-      console.error('ImageLoader Error: ' + e);
-      done();
-    };
+    const localPath = this.file.cacheDirectory + this.config.cacheDirectoryName + '/' + this.createFileName(currentItem.imageUrl);
 
-    if(this.currentlyProcessing[currentItem.imageUrl] === undefined) {
-      this.currentlyProcessing[currentItem.imageUrl] = new Promise((resolve, reject) => {
-          // process more items concurrently if we can
-          if(this.canProcess) {
-            this.processQueue();
-          }
+    transfer.download(currentItem.imageUrl, localPath, Boolean(this.config.fileTransferOptions.trustAllHosts), this.config.fileTransferOptions)
+      .then((file: FileEntry) => {
+        if(this.shouldIndex) {
+          this.addFileToIndex(file).then(this.maintainCacheSize.bind(this));
+        }
+        return this.getCachedImagePath(currentItem.imageUrl);
+      })
+      .then((localUrl) => {
+        currentItem.resolve(localUrl);
+        done();
+      })
+      .catch((e) => {
+        currentItem.reject();
+        this.throwError(e);
+        done();
+      });
 
-          const localDir = this.getFileCacheDirectory();
-          const fileName = this.config.cacheDirectoryName + '/' + this.createFileName(currentItem.imageUrl);
-
-          this.http.get(currentItem.imageUrl, {
-            responseType: 'blob',
-            headers: this.config.httpHeaders
-          }).subscribe(
-            (data: Blob) => {
-              this.file.writeFile({
-                path: fileName,
-                data: data,
-                directory: localDir,
-              })
-                .then(() => {
-                  if(this.isCacheSpaceExceeded) {
-                    this.maintainCacheSize();
-                  }
-                  this.addFileToIndex(fileName).then(() => {
-                    this.getCachedImagePath(currentItem.imageUrl).then((localUrl) => {
-                      currentItem.resolve(localUrl);
-                      resolve();
-                      done();
-                      this.maintainCacheSize();
-                    });
-                  });
-                }).catch((e) => {
-                // Could not write image
-                error(e);
-                reject(e);
-              });
-            },
-            (e) => {
-              // Could not get image via httpClient
-              error(e);
-              reject(e);
-            });
-        },
-      );
-    } else {
-      // Prevented same Image from loading at the same time
-      this.currentlyProcessing[currentItem.imageUrl].then(() => {
-          this.getCachedImagePath(currentItem.imageUrl).then(localUrl => {
-            currentItem.resolve(localUrl);
-          });
-          done();
-        },
-        (e) => {
-          error(e);
-        });
-    }
-  }
-
-  /**
-   * Search if the url is currently in the queue
-   * @param imageUrl {string} Image url to search
-   * @returns {boolean}
-   */
-  private currentlyInQueue(imageUrl: string) {
-    return this.queue.some(item => item.imageUrl === imageUrl);
   }
 
   /**
    * Initialize the cache service
-   * @param [boolean] replace Whether to replace the cache directory if it already exists
+   * @param replace {boolean} Whether to replace the cache directory if it already exists
    */
   private initCache(replace?: boolean): void {
+
     this.concurrency = this.config.concurrency;
-    if(this.config.debugMode) {
-      console.log("Initializing cache...")
-    }
+
     // create cache directories if they do not exist
     this.createCacheDirectory(replace)
-      .then(() => {
-        this.indexCache();
+      .catch(e => {
+        this.throwError(e);
+        this.isInit = true;
       })
+      .then(() => this.indexCache())
       .then(() => {
         this.isCacheReady = true;
         this.isInit = true;
-      })
-      .catch((e) => {
-        if(this.config.debugMode) {
-        console.error('Cannot create storage directory.');
-        }
-        this.isInit = true;
       });
+
   }
 
   /**
    * Adds a file to index.
    * Also deletes any files if they are older than the set maximum cache age.
-   * @param {string} name file to index
+   * @param file {FileEntry} File to index
    * @returns {Promise<any>}
    */
-  private addFileToIndex(fileName: string): Promise<any> {
-    return new Promise<any>((resolve, reject) =>
-      this.file.stat({
-        path: fileName,
-        directory: this.getFileCacheDirectory()
-      }),
-    ).then(metadata => {
-      if(
-        this.config.maxCacheAge > -1 &&
-        Date.now() - metadata.mtime >
-        this.config.maxCacheAge
-      ) {
-        // file age exceeds maximum cache age
-        return this.file.deleteFile({
-          path: fileName,
-          directory: this.getFileCacheDirectory()
-        });
-      } else {
-        // file age doesn't exceed maximum cache age, or maximum cache age isn't set
-        this.currentCacheSize += metadata.size;
+  private addFileToIndex(file: FileEntry): Promise<any> {
+    return new Promise<any>((resolve, reject) => file.getMetadata(resolve, reject))
+      .then(metadata => {
 
-        // add item to index
-        this.cacheIndex.push({
-          name: fileName,
-          modificationTime: metadata.mtime,
-          size: metadata.size,
-        });
+        if(
+          this.config.maxCacheAge > -1
+          && (Date.now() - metadata.modificationTime.getTime()) > this.config.maxCacheAge
+        ) {
+          // file age exceeds maximum cache age
+          return this.removeFile(file.name);
+        } else {
 
-        return Promise.resolve();
-      }
-    });
+          // file age doesn't exceed maximum cache age, or maximum cache age isn't set
+          this.currentCacheSize += metadata.size;
+
+          // add item to index
+          this.cacheIndex.push({
+            name: file.name,
+            modificationTime: metadata.modificationTime,
+            size: metadata.size
+          });
+
+          return Promise.resolve();
+
+        }
+
+      });
   }
 
   /**
    * Indexes the cache if necessary
-   * @returns {Promise<void>}
+   * @returns {any}
    */
   private indexCache(): Promise<void> {
+
+    // only index if needed, to save resources
+    if(!this.shouldIndex) return Promise.resolve();
+
     this.cacheIndex = [];
-    if(this.config.debugMode) {
-      console.log("Cache created. Indexing it...");
-    }
-    return this.file.readdir({
-      path: this.config.cacheDirectoryName,
-      directory: this.getFileCacheDirectory()
-    })
-      .then(files => {
-        if(files.length !== 0) {
-          if(this.config.debugMode){
-            console.log("Folder not empty, adding content to the index...")
-          }
-          files.map((e) => console.log(e));
-          let promises = files.map(this.addFileToIndex, this)
-          Promise.all(promises)
-        }
-      })
+
+    return this.file.listDir(this.file.cacheDirectory, this.config.cacheDirectoryName)
+      .then(files => Promise.all(files.map(this.addFileToIndex.bind(this))))
       .then(() => {
         // Sort items by date. Most recent to oldest.
-        if(this.config.debugMode){
-          console.log("Attempting to sort items in storage folder by date...")
-        }
-        this.cacheIndex = this.cacheIndex.sort(
-          (a: IndexItem, b: IndexItem): number => (a > b ? -1 : a < b ? 1 : 0),
-        );
+        this.cacheIndex = this.cacheIndex.sort((a: IndexItem, b: IndexItem): number => a > b ? -1 : a < b ? 1 : 0);
         this.indexed = true;
-        if(this.config.debugMode) {
-          console.log("Cache indexed.")
-        }
         return Promise.resolve();
       })
       .catch(e => {
-        if(this.config.debugMode) {
-          console.error("Cannot index cache.")
-        }
+        this.throwError(e);
         return Promise.resolve();
       });
   }
@@ -542,9 +400,12 @@ export class MediaLoader {
    * If the limit is reached, it will delete old images to create free space.
    */
   private maintainCacheSize(): void {
+
     if(this.config.maxCacheSize > -1 && this.indexed) {
+
       const maintain = () => {
         if(this.currentCacheSize > this.config.maxCacheSize) {
+
           // called when item is done processing
           const next: Function = () => {
             this.currentCacheSize -= file.size;
@@ -554,65 +415,119 @@ export class MediaLoader {
           // grab the first item in index since it's the oldest one
           const file: IndexItem = this.cacheIndex.splice(0, 1)[0];
 
-          if(typeof file === 'undefined') {
-            return maintain();
-          }
+          if(typeof file == 'undefined') return maintain();
 
           // delete the file then process next file if necessary
-          this.file.deleteFile({
-            path: this.config.cacheDirectoryName + '/' + file,
-            directory: this.getFileCacheDirectory()
-          })
+          this.removeFile(file.name)
             .then(() => next())
             .catch(() => next()); // ignore errors, nothing we can do about it
         }
       };
 
       maintain();
+
     }
+
+  }
+
+  /**
+   * Remove a file
+   * @param file {string} The name of the file to remove
+   */
+  private removeFile(file: string): Promise<any> {
+    return this.file
+      .removeFile(this.file.cacheDirectory + this.config.cacheDirectoryName, file)
+      .then(() => {
+        if(this.isWKWebView && !this.isIonicWKWebView) {
+          return this.file
+            .removeFile(this.file.tempDirectory + this.config.cacheDirectoryName, file)
+            .catch(() => {
+              // Noop catch. Removing the files from tempDirectory might fail, as it is not persistent.
+            });
+        }
+      });
   }
 
   /**
    * Get the local path of a previously cached image if exists
-   * @param {string} url The remote URL of the image
+   * @param url {string} The remote URL of the image
    * @returns {Promise<string>} Returns a promise that resolves with the local path if exists, or rejects if doesn't exist
    */
   private getCachedImagePath(url: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-        // make sure cache is ready
-        if(!this.isCacheReady) {
-          return reject();
-        }
 
-        // if we're running with livereload, ignore cache and call the resource from it's URL
-        if(this.isWeb) {
-          return resolve(url);
-        }
-
-        // get file name
-        const fileName = this.config.cacheDirectoryName + '/' + this.createFileName(url);
-
-        // get full path
-        const dirPath = this.getFileCacheDirectory();
-
-        // check if exists
-        this.checkDir(fileName, dirPath)
-          .then((uri) => {
-            if(this.config.debugMode){
-              console.log("File exists in storage, returning it uri.")
-            }
-
-            resolve(uri)
-          })
-          .catch(() => {
-            if(this.config.debugMode){
-              console.log("File doesn't exist, go process it in queue.")
-            }
-            reject()
-          });
-
+      // make sure cache is ready
+      if(!this.isCacheReady) {
+        return reject();
       }
-    );
+
+      // get file name
+      const fileName = this.createFileName(url);
+
+      // get full path
+      const dirPath = this.file.cacheDirectory + this.config.cacheDirectoryName,
+        tempDirPath = this.file.tempDirectory + this.config.cacheDirectoryName;
+
+      // check if exists
+      this.file.resolveLocalFilesystemUrl(dirPath + '/' + fileName)
+        .then((fileEntry: FileEntry) => {
+          // file exists in cache
+
+          if(this.config.imageReturnType === 'base64') {
+
+            // read the file as data url and return the base64 string.
+            // should always be successful as the existence of the file
+            // is alreay ensured
+            this.file
+              .readAsDataURL(dirPath, fileName)
+              .then((base64: string) => {
+                base64 = base64.replace('data:null', 'data:*/*');
+                resolve(base64);
+              })
+              .catch(reject);
+
+          } else if(this.config.imageReturnType === 'uri') {
+
+
+            // return native path
+            resolve((<any>window).Ionic.WebView.convertFileSrc(<string>fileEntry.nativeURL));
+
+          }
+        })
+        .catch(reject); // file doesn't exist
+
+    });
+  }
+
+  /**
+   * Throws a console error if debug mode is enabled
+   * @param args {any[]} Error message
+   */
+  private throwError(...args: any[]): void {
+    if(this.config.debugMode) {
+      args.unshift('ImageLoader Error: ');
+      console.error.apply(console, args);
+    }
+  }
+
+  /**
+   * Throws a console warning if debug mode is enabled
+   * @param args {any[]} Error message
+   */
+  private throwWarning(...args: any[]): void {
+    if(this.config.debugMode) {
+      args.unshift('ImageLoader Warning: ');
+      console.warn.apply(console, args);
+    }
+  }
+
+  /**
+   * Check if the cache directory exists
+   * @param directory {string} The directory to check. Either this.file.tempDirectory or this.file.cacheDirectory
+   * @returns {Promise<boolean|FileError>} Returns a promise that resolves if exists, and rejects if it doesn't
+   */
+  private cacheDirectoryExists(directory: string): Promise<boolean> {
+    return this.file.checkDir(directory, this.config.cacheDirectoryName);
   }
 
   /**
@@ -621,112 +536,71 @@ export class MediaLoader {
    * @returns {Promise<DirectoryEntry|FileError>} Returns a promise that resolves if the directories were created, and rejects on error
    */
   private createCacheDirectory(replace: boolean = false): Promise<any> {
-    return new Promise<any>((resolve, reject) => {
-      if (this.config.debugMode) {
-        console.log("Checking storage directory status...");
-      }
+    let cacheDirectoryPromise: Promise<any>,
+      tempDirectoryPromise: Promise<any>;
+
+
+    if(replace) {
+      // create or replace the cache directory
+      cacheDirectoryPromise = this.file.createDir(this.file.cacheDirectory, this.config.cacheDirectoryName, replace);
+    } else {
+      // check if the cache directory exists.
+      // if it does not exist create it!
+      cacheDirectoryPromise = this.cacheDirectoryExists(this.file.cacheDirectory)
+        .catch(() => this.file.createDir(this.file.cacheDirectory, this.config.cacheDirectoryName, false));
+    }
+
+    if(this.isWKWebView && !this.isIonicWKWebView) {
       if(replace) {
-        if(this.config.debugMode){
-          console.log("Attempting to delete previous directory")
-        }
-        this.file.rmdir({
-          path: this.config.cacheDirectoryName,
-          directory: this.getFileCacheDirectory()
-        })
-          .then(() => {
-            if(this.config.debugMode){
-              console.log("Deleting done. Attempting to create new one...")
-            }
-            this.file.mkdir({
-              path: this.config.cacheDirectoryName,
-              directory: this.getFileCacheDirectory(),
-              createIntermediateDirectories: false
-            })
-              .then(() => {
-                if(this.config.debugMode) {
-                  console.log("Creating done.")
-                }
-                resolve()
-              })
-              .catch((e) => {
-                console.error("Cannot create directory (replace case).")
-                reject(e)
-              })
-          })
-          .catch((e) => {
-            console.error("Cannot delete directory (replace case).")
-            reject(e)
-          })
+        // create or replace the temp directory
+        tempDirectoryPromise = this.file.createDir(this.file.tempDirectory, this.config.cacheDirectoryName, replace);
       } else {
-        // check if the cache directory exists.
+        // check if the temp directory exists.
         // if it does not exist create it!
-        this.checkDir(this.config.cacheDirectoryName, this.getFileCacheDirectory())
-          .then(() => {
-            if(this.config.debugMode){
-              console.log("Directory already exists, nothing more to do.")
-            }
-            resolve()
-          })
-          .catch(() => {
-            this.file.mkdir({
-              path: this.config.cacheDirectoryName,
-              directory: this.getFileCacheDirectory(),
-              createIntermediateDirectories: true
-            })
-              .then(resolve())
-              .catch((e) => {
-                console.error("Cannot create directory.")
-                reject(e);
-              });
-          });
+        tempDirectoryPromise = this.cacheDirectoryExists(this.file.tempDirectory)
+          .catch(() => this.file.createDir(this.file.tempDirectory, this.config.cacheDirectoryName, false));
       }
-    })
+    } else {
+      tempDirectoryPromise = Promise.resolve();
+    }
+
+    return Promise.all([cacheDirectoryPromise, tempDirectoryPromise]);
   }
 
   /**
    * Creates a unique file name out of the URL
-   * @param {string} url URL of the file
+   * @param url {string} URL of the file
    * @returns {string} Unique file name
    */
   private createFileName(url: string): string {
     // hash the url to get a unique file name
-    return (
-      this.hashString(url).toString() + this.getExtensionFromUrl(url)
-    );
+    return this.hashString(url).toString() + this.getExtensionFromFileName(url);
   }
 
   /**
    * Converts a string to a unique 32-bit int
-   * @param {string} string string to hash
+   * @param string {string} string to hash
    * @returns {number} 32-bit int
    */
   private hashString(string: string): number {
     let hash = 0,
       char;
-    if(string.length === 0) {
-      return hash;
-    }
+    if(string.length === 0) return hash;
     for(let i = 0; i < string.length; i++) {
       char = string.charCodeAt(i);
-      // tslint:disable-next-line
-      hash = (hash << 5) - hash + char;
-      // tslint:disable-next-line
+      hash = ((hash << 5) - hash) + char;
       hash = hash & hash;
     }
     return hash;
   }
 
   /**
-   * Extract extension from filename or url
+   * extract extension from filename or url
    *
-   * @param {string} url
+   * @param filename
    * @returns {string}
    */
-  private getExtensionFromUrl(url: string): string {
-    const urlWitoutParams = url.split(/\#|\?/)[0];
-    return (
-      urlWitoutParams.substr((~-urlWitoutParams.lastIndexOf('.') >>> 0) + 1) ||
-      this.config.fallbackFileNameCachedExtension
-    );
+  private getExtensionFromFileName(filename) {
+    return filename.substr((~-filename.lastIndexOf(".") >>> 0) + 1) || this.config.fallbackFileNameCachedExtension;
   }
 }

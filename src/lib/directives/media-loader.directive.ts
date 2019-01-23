@@ -1,6 +1,5 @@
 import { Directive, ElementRef, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { MediaLoader } from '../providers/media-loader'
-import { MediaLoaderConfig } from '../providers/media-loader-config'
 
 @Directive({
   selector: '[loadMedia]',
@@ -17,7 +16,7 @@ export class MediaLoaderDirective implements OnInit {
   private loadingClass = 'src-loading';
   private loadedClass = 'src-loaded';
 
-  constructor(el: ElementRef, public mediaLoader: MediaLoader, public mediaLoaderConfig: MediaLoaderConfig) {
+  constructor(el: ElementRef, public mediaLoader: MediaLoader) {
 
     this.element = el.nativeElement;
     this.loaded = new EventEmitter();

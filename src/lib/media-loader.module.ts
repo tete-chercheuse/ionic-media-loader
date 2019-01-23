@@ -1,10 +1,11 @@
-import { HttpClientModule } from '@angular/common/http';
 import { ModuleWithProviders, NgModule } from '@angular/core';
 import { IonicModule } from '@ionic/angular';
 import { MediaLoaderDirective } from './directives/media-loader.directive';
 import { MediaLoader } from './providers/media-loader';
-import { MediaLoaderConfig } from './providers/media-loader-config';
 import { CommonModule } from "@angular/common";
+import { File } from '@ionic-native/file/ngx';
+import { FileTransfer } from '@ionic-native/file-transfer/ngx';
+
 
 @NgModule({
   declarations: [
@@ -13,7 +14,6 @@ import { CommonModule } from "@angular/common";
   imports: [
     CommonModule,
     IonicModule,
-    HttpClientModule,
   ],
   exports: [
     MediaLoaderDirective,
@@ -24,8 +24,9 @@ export class IonicMediaLoader {
     return {
       ngModule: IonicMediaLoader,
       providers: [
-        MediaLoaderConfig,
         MediaLoader,
+        File,
+        FileTransfer,
       ],
     };
   }
