@@ -1,27 +1,67 @@
-# NgxFidback
+# Ionic Image Loader
+**Ionic** Module that loads images in a background thread and caches them for later use. Uses `cordova-plugin-file` and `cordova-plugin-file-transfer` via [`ionic-native`](https://github.com/driftyco/ionic-native) wrappers.
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 7.1.4.
 
-## Development server
+## Features
+- Downloads images via a **native thread**. Images will download faster and they will not use the Webview's resources.
+- **Caches images** for later use. Images will be show up instantly the next time you display them since they're already saved on the local storage.
+- Allows setting **maximum cache age** to delete old images automatically. This is optional and **disabled by default**.
+- Allows setting **maximum cache size** to control how much space your app takes out of the users' phones. This is optional and **disabled by default**.
+- Works with **[Capacitor](https://github.com/ionic-team/capacitor/e)**.
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+![Gif](https://github.com/ihadeed/ionic-image-loader-example/blob/master/gif.gif?raw=true)
 
-## Code scaffolding
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+- [Installation](https://github.com/tete-chercheuse/ionic-media-loader#installation)
+- [Usage](https://github.com/tete-chercheuse/ionic-media-loader#usage)
 
-## Build
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `--prod` flag for a production build.
+## Installation
 
-## Running unit tests
+#### 1. Install the NPM Package
+```
+npm install --save tete-chercheuse/ionic-media-loader
+```
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+#### 2. Install Required Plugins
+```
+npm i --save cordova-plugin-file @ionic-native/file
+npm i --save cordova-plugin-file-transfer @ionic-native/file-transfer
+```
 
-## Running end-to-end tests
+#### 3. Import `IonicMediaLoader` module
 
-Run `ng e2e` to execute the end-to-end tests via [Protractor](http://www.protractortest.org/).
+**Add `IonicMediaLoader.forRoot()` in your app's root module**
+```typescript
+import { IonicMediaLoader } from 'ionic-media-loader';
 
-## Further help
+// import the module
+@NgModule({
+  ...
+  imports: [
+    IonicMediaLoader.forRoot()
+  ]
+})
+export class AppModule {}
+```
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI README](https://github.com/angular/angular-cli/blob/master/README.md).
+**Then add `IonicMediaLoader` in your child/shared module(s)**
+```typescript
+import { IonicMediaLoader } from 'ionic-media-loader';
+
+@NgModule({
+  ...
+  imports: [
+    IonicMediaLoader
+  ]
+})
+export class SharedModule {}
+```
+
+## Usage
+
+This HTML code demonstrates the usage of this module:
+```html
+<img loadMedia="https://path.to/my/image.jpg"/>
+<div [loadMedia]="url"></div>
+```

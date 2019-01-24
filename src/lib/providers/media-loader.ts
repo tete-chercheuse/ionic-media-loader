@@ -5,7 +5,6 @@ import { Platform } from '@ionic/angular';
 
 import { Plugins } from '@capacitor/core';
 
-
 interface IndexItem {
   name: string;
   modificationTime: Date;
@@ -23,9 +22,22 @@ const { Device } = Plugins;
 @Injectable()
 export class MediaLoader {
 
-  get nativeAvailable(): boolean {
-    return File.installed() && FileTransfer.installed();
-  }
+  /**
+   * Module configuration
+   * @type {object}
+   */
+  public config = {
+    debugMode: true,
+    concurrency: 5,
+    maxCacheSize: -1,
+    maxCacheAge: -1,
+    fallbackFileNameCachedExtension: '.jpg',
+    imageReturnType: 'uri',
+    cacheDirectoryName: 'ionic-media-loader',
+    fileTransferOptions: {
+      trustAllHosts: false
+    }
+  };
 
   /**
    * Indicates if the cache service is ready.
@@ -46,20 +58,6 @@ export class MediaLoader {
    * @type {number}
    */
   private concurrency: number = 5;
-
-  public config = {
-
-    debugMode: true,
-    concurrency: 5,
-    maxCacheSize: -1,
-    maxCacheAge: -1,
-    fallbackFileNameCachedExtension: '.jpg',
-    imageReturnType: 'uri',
-    cacheDirectoryName: 'ionic-media-loader',
-    fileTransferOptions: {
-      trustAllHosts: false
-    }
-  }
 
   /**
    * Queue items
@@ -93,6 +91,10 @@ export class MediaLoader {
     return this.isWKWebView && (location.host === 'localhost:8080' || (<any>window).LiveReload);
   }
 
+  private get nativeAvailable(): boolean {
+    return File.installed() && FileTransfer.installed();
+  }
+
   constructor(private file: File, private fileTransfer: FileTransfer, private platform: Platform) {
 
     this.device = Device;
@@ -123,7 +125,7 @@ export class MediaLoader {
     })
   }
 
-  async defineIsWeb(): Promise<boolean> {
+  public async defineIsWeb(): Promise<boolean> {
     const device = await this.device.getInfo();
     return device.platform === 'web';
   }
@@ -133,14 +135,14 @@ export class MediaLoader {
    * @param imageUrl {string} Image URL
    * @returns {Promise<string>} returns a promise that resolves with the cached image URL
    */
-  preload(imageUrl: string): Promise<string> {
+  public preload(imageUrl: string): Promise<string> {
     return this.getImagePath(imageUrl);
   }
 
   /**
    * Clears the cache
    */
-  clearCache(): void {
+  public clearCache(): void {
 
     if(this.isWeb) return;
 
@@ -189,7 +191,7 @@ export class MediaLoader {
    * @param imageUrl {string} The remote URL of the image
    * @returns {Promise<string>} Returns a promise that will always resolve with an image URL
    */
-  getImagePath(imageUrl: string): Promise<string> {
+  public getImagePath(imageUrl: string): Promise<string> {
 
     if(typeof imageUrl !== 'string' || imageUrl.length <= 0) {
       return Promise.reject('The image url provided was empty or invalid.');
