@@ -1,20 +1,20 @@
-import { Directive, ElementRef, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Directive, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
 import { MediaLoader } from '../providers/media-loader'
 
 @Directive({
   selector: '[loadMedia]',
 })
-export class MediaLoaderDirective implements OnInit {
+export class MediaLoaderDirective implements OnInit, OnChanges {
 
   @Input('loadMedia') targetSource: string;
   @Output() loaded: EventEmitter<any>;
 
   private readonly element;
-  private readonly isImg;
-  private readonly isVideo;
-  private readonly isSource;
-  private loadingClass = 'src-loading';
-  private loadedClass = 'src-loaded';
+  private readonly isImg: boolean;
+  private readonly isVideo: boolean;
+  private readonly isSource: boolean;
+  private readonly loadingClass: string = 'src-loading';
+  private readonly loadedClass: string = 'src-loaded';
 
   constructor(el: ElementRef, public mediaLoader: MediaLoader) {
 
@@ -26,36 +26,49 @@ export class MediaLoaderDirective implements OnInit {
     this.isSource = (this.element.nodeName.toLowerCase() === 'source');
   }
 
-  public ngOnInit() {
+  public async ngOnInit() {
 
     this.setLoadingStyle(this.element);
 
-    if(this.isImg || !this.isVideo || !this.isSource) {
+    try {
 
-      this.setSrc(this.element, 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
-      this.mediaLoader.preload(this.targetSource)
-        .then((imageUrl: string) => {
+      const src = await this.mediaLoader.preload(this.targetSource);
 
-          this.setSrc(this.element, imageUrl);
+      if(this.isImg || !this.isVideo || !this.isSource) {
+
+        this.setSrc(this.element, 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
+
+        const downloadingImage = new Image();
+
+        downloadingImage.onload = () => {
+          this.setSrc(this.element, src);
           this.setLoadedStyle(this.element);
           this.loaded.next('loaded');
+        }
 
-        })
-        .catch((error) => console.error(error));
+        downloadingImage.src = src;
 
-    } else if(this.isVideo || this.isSource) {
+      } else if(this.isVideo || this.isSource) {
 
-      this.setSrc(this.element, this.targetSource);
+        this.setSrc(this.element, src);
 
-      const video = (this.isSource) ? this.element.parentElement : this.element;
+        const video = (this.isSource) ? this.element.parentElement : this.element;
 
-      video.addEventListener('canplaythrough', () => {
-        this.setLoadedStyle(this.element)
-        this.loaded.next('loaded');
-      }, false);
+        video.addEventListener('canplaythrough', () => {
+          this.setLoadedStyle(this.element)
+          this.loaded.next('loaded');
+        }, false);
 
+      }
+
+    } catch(error) {
+      console.error(error);
     }
 
+  }
+
+  public async ngOnChanges() {
+    await this.ngOnInit();
   }
 
   private setSrc(element: HTMLElement, imagePath: string) {
