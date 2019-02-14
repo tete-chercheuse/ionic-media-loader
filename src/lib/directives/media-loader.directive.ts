@@ -1,10 +1,10 @@
 import { Directive, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
-import { MediaLoader } from '../providers/media-loader'
+import { IonicMediaLoaderService } from '../services/media-loader.service';
 
 @Directive({
   selector: '[loadMedia]',
 })
-export class MediaLoaderDirective implements OnInit, OnChanges {
+export class IonicMediaLoaderDirective implements OnInit, OnChanges {
 
   @Input('loadMedia') targetSource: string;
   @Output() loaded: EventEmitter<any>;
@@ -16,7 +16,7 @@ export class MediaLoaderDirective implements OnInit, OnChanges {
   private readonly loadingClass: string = 'src-loading';
   private readonly loadedClass: string = 'src-loaded';
 
-  constructor(el: ElementRef, public mediaLoader: MediaLoader) {
+  constructor(el: ElementRef, public mediaLoader: IonicMediaLoaderService) {
 
     this.element = el.nativeElement;
     this.loaded = new EventEmitter();

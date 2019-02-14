@@ -2,8 +2,9 @@ import { Injectable } from '@angular/core';
 import { File, FileEntry, FileError, DirectoryEntry } from '@ionic-native/file/ngx';
 import { FileTransfer, FileTransferObject } from '@ionic-native/file-transfer/ngx';
 import { Platform } from '@ionic/angular';
-
 import { Plugins } from '@capacitor/core';
+
+import { IonicMediaLoaderModule } from '../media-loader.module';
 
 interface IndexItem {
   name: string;
@@ -19,8 +20,10 @@ interface QueueItem {
 
 const { Device } = Plugins;
 
-@Injectable()
-export class MediaLoader {
+@Injectable({
+  providedIn: IonicMediaLoaderModule
+})
+export class IonicMediaLoaderService {
 
   /**
    * Module configuration
