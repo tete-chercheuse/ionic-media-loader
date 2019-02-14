@@ -210,7 +210,6 @@ export class IonicMediaLoaderService {
           if(this.isCacheReady) {
             getImage();
           } else {
-            this.throwWarning('The cache system is not running. Images will be loaded by your browser instead.');
             resolve(imageUrl);
           }
         } else {
@@ -322,12 +321,14 @@ export class IonicMediaLoaderService {
     this.createCacheDirectory(replace)
       .catch(e => {
         this.throwError(e);
+        this.throwWarning('The cache system is not running. Images will be loaded by your browser instead.');
         this.isInit = true;
       })
       .then(() => this.indexCache())
       .then(() => {
         this.isCacheReady = true;
         this.isInit = true;
+        this.throwLog('The cache system is ready and running.')
       });
 
   }
@@ -413,7 +414,7 @@ export class IonicMediaLoaderService {
           // grab the first item in index since it's the oldest one
           const file: IndexItem = this.cacheIndex.splice(0, 1)[0];
 
-          if(typeof file == 'undefined') return maintain();
+          if(typeof file === 'undefined') return maintain();
 
           // delete the file then process next file if necessary
           this.removeFile(file.name)
@@ -502,7 +503,7 @@ export class IonicMediaLoaderService {
    */
   private throwError(...args: any[]): void {
     if(this.config.debugMode) {
-      args.unshift('ImageLoader Error: ');
+      args.unshift('MediaLoader Error: ');
       console.error.apply(console, args);
     }
   }
@@ -513,8 +514,19 @@ export class IonicMediaLoaderService {
    */
   private throwWarning(...args: any[]): void {
     if(this.config.debugMode) {
-      args.unshift('ImageLoader Warning: ');
+      args.unshift('MediaLoader Warning: ');
       console.warn.apply(console, args);
+    }
+  }
+
+  /**
+   * Throws a console warning if debug mode is enabled
+   * @param args {any[]} Error message
+   */
+  private throwLog(...args: any[]): void {
+    if(this.config.debugMode) {
+      args.unshift('MediaLoader Log: ');
+      console.log.apply(console, args);
     }
   }
 

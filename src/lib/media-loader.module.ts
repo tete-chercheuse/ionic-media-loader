@@ -17,9 +17,9 @@ import { IonicMediaLoaderService } from "./services/media-loader.service";
     IonicModule,
   ],
   providers: [
-    IonicMediaLoaderService,
     File,
     FileTransfer,
+    IonicMediaLoaderService,
   ],
   exports: [
     IonicMediaLoaderDirective,
