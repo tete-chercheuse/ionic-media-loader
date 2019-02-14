@@ -106,9 +106,8 @@ export class IonicMediaLoaderService {
         // we are running on a browser, or using livereload
         // plugin will not function in this case
         this.isInit = true;
-        if(this.config.debugMode === true) {
-          console.error('ImageLoader Error: You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
-        }
+        this.throwWarning('You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
+
       } else {
         if(this.nativeAvailable) {
           this.initCache();
@@ -116,9 +115,7 @@ export class IonicMediaLoaderService {
           // we are running on a browser, or using livereload
           // plugin will not function in this case
           this.isInit = true;
-          if(this.config.debugMode === true) {
-            console.error('ImageLoader Error: You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
-          }
+          this.throwWarning('You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
         }
       }
     })
@@ -488,7 +485,6 @@ export class IonicMediaLoaderService {
               .catch(reject);
 
           } else if(this.config.imageReturnType === 'uri') {
-
 
             // return native path
             resolve((<any>window).Ionic.WebView.convertFileSrc(<string>fileEntry.nativeURL));

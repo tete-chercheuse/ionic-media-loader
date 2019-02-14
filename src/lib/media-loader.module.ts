@@ -16,6 +16,11 @@ import { IonicMediaLoaderService } from "./services/media-loader.service";
     CommonModule,
     IonicModule,
   ],
+  providers: [
+    IonicMediaLoaderService,
+    File,
+    FileTransfer,
+  ],
   exports: [
     IonicMediaLoaderDirective,
   ],
@@ -24,11 +29,6 @@ export class IonicMediaLoaderModule {
   static forRoot(): ModuleWithProviders {
     return {
       ngModule: IonicMediaLoaderModule,
-      providers: [
-        IonicMediaLoaderService,
-        File,
-        FileTransfer,
-      ]
     };
   }
 }
