@@ -4,8 +4,6 @@ import { FileTransfer, FileTransferObject } from '@ionic-native/file-transfer/ng
 import { Platform } from '@ionic/angular';
 import { Plugins } from '@capacitor/core';
 
-import { IonicMediaLoaderModule } from '../media-loader.module';
-
 interface IndexItem {
   name: string;
   modificationTime: Date;
@@ -20,9 +18,7 @@ interface QueueItem {
 
 const { Device } = Plugins;
 
-@Injectable({
-  providedIn: IonicMediaLoaderModule
-})
+@Injectable()
 export class IonicMediaLoaderService {
 
   /**

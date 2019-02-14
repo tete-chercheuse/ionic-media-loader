@@ -1,9 +1,11 @@
 import { ModuleWithProviders, NgModule } from '@angular/core';
-import { IonicModule } from '@ionic/angular';
-import { IonicMediaLoaderDirective } from './directives/media-loader.directive';
 import { CommonModule } from "@angular/common";
+import { IonicModule } from '@ionic/angular';
 import { File } from '@ionic-native/file/ngx';
 import { FileTransfer } from '@ionic-native/file-transfer/ngx';
+
+import { IonicMediaLoaderDirective } from './directives/media-loader.directive';
+import { IonicMediaLoaderService } from "./services/media-loader.service";
 
 
 @NgModule({
@@ -23,6 +25,7 @@ export class IonicMediaLoaderModule {
     return {
       ngModule: IonicMediaLoaderModule,
       providers: [
+        IonicMediaLoaderService,
         File,
         FileTransfer,
       ]
