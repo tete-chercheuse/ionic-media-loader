@@ -13,8 +13,6 @@ import { FileTransfer } from '@ionic-native/file-transfer/ngx';
   imports: [
     CommonModule,
     IonicModule,
-    File,
-    FileTransfer,
   ],
   exports: [
     IonicMediaLoaderDirective,
@@ -23,7 +21,11 @@ import { FileTransfer } from '@ionic-native/file-transfer/ngx';
 export class IonicMediaLoaderModule {
   static forRoot(): ModuleWithProviders {
     return {
-      ngModule: IonicMediaLoaderModule
+      ngModule: IonicMediaLoaderModule,
+      providers: [
+        File,
+        FileTransfer,
+      ]
     };
   }
 }
