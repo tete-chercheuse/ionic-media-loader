@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { File, FileEntry, FileError, DirectoryEntry } from '@ionic-native/file/ngx';
 import { FileTransfer, FileTransferObject } from '@ionic-native/file-transfer/ngx';
 import { Platform } from '@ionic/angular';
-import { Plugins } from '@capacitor/core';
 
 interface IndexItem {
   name: string;
@@ -16,14 +15,11 @@ interface QueueItem {
   reject: Function;
 }
 
-const { Device } = Plugins;
-
 @Injectable()
 export class IonicMediaLoaderService {
 
   /**
    * Module configuration
-   * @type {object}
    */
   public config = {
     debugMode: true,
@@ -41,26 +37,22 @@ export class IonicMediaLoaderService {
   /**
    * Indicates if the cache service is ready.
    * When the cache service isn't ready, images are loaded via browser instead.
-   * @type {boolean}
    */
   private isCacheReady: boolean = false;
 
   /**
    * Indicates if this service is initialized.
    * This service is initialized once all the setup is done.
-   * @type {boolean}
    */
   private isInit: boolean = false;
 
   /**
    * Number of concurrent requests allowed
-   * @type {number}
    */
   private concurrency: number = 5;
 
   /**
    * Queue items
-   * @type {Array}
    */
   private queue: QueueItem[] = [];
 
@@ -78,38 +70,21 @@ export class IonicMediaLoaderService {
 
   private isWeb: boolean = false;
 
-  private get shouldIndex(): boolean {
-    return (this.config.maxCacheAge > -1) || (this.config.maxCacheSize > -1);
-  }
+  constructor(private readonly platform: Platform, private readonly file: File, private readonly fileTransfer: FileTransfer) {
 
-  private get isWKWebView(): boolean {
-    return this.platform.is('ios') && (<any>window).webkit && (<any>window).webkit.messageHandlers;
-  }
+    this.platform.ready().then(() => {
 
-  private get isIonicWKWebView(): boolean {
-    return this.isWKWebView && (location.host === 'localhost:8080' || (<any>window).LiveReload);
-  }
+      this.isWeb = (!this.platform.is('cordova') && !this.platform.is('capacitor'));
 
-  private get nativeAvailable(): boolean {
-    return File.installed() && FileTransfer.installed();
-  }
-
-  constructor(private file: File, private fileTransfer: FileTransfer, private platform: Platform) {
-
-    this.device = Device;
-
-    this.defineIsWeb().then(isWeb => {
-
-      this.isWeb = isWeb;
-
-      if(isWeb) {
+      if(this.isWeb) {
         // we are running on a browser, or using livereload
         // plugin will not function in this case
         this.isInit = true;
         this.throwWarning('You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
 
       } else {
-        if(this.nativeAvailable) {
+
+        if(this.pluginsInstalled) {
           this.initCache();
         } else {
           // we are running on a browser, or using livereload
@@ -118,18 +93,19 @@ export class IonicMediaLoaderService {
           this.throwWarning('You are running on a browser or using livereload, IonicMediaLoader will not function, falling back to browser loading.');
         }
       }
-    })
+    });
   }
 
-  public async defineIsWeb(): Promise<boolean> {
-    const device = await this.device.getInfo();
-    return device.platform === 'web';
+  private get shouldIndex(): boolean {
+    return (this.config.maxCacheAge > -1) || (this.config.maxCacheSize > -1);
+  }
+
+  private get pluginsInstalled(): boolean {
+    return File.installed() && FileTransfer.installed();
   }
 
   /**
    * Preload an image
-   * @param imageUrl {string} Image URL
-   * @returns {Promise<string>} returns a promise that resolves with the cached image URL
    */
   public preload(imageUrl: string): Promise<string> {
     return this.getImagePath(imageUrl);
@@ -154,38 +130,16 @@ export class IonicMediaLoaderService {
       this.isInit = false;
 
       this.file.removeRecursively(this.file.cacheDirectory, this.config.cacheDirectoryName)
-        .then(() => {
-          if(this.isWKWebView && !this.isIonicWKWebView) {
-
-            // also clear the temp files
-            this.file.removeRecursively(this.file.tempDirectory, this.config.cacheDirectoryName)
-              .catch((error) => {
-                // Noop catch. Removing the tempDirectory might fail,
-                // as it is not persistent.
-              })
-              .then(() => {
-                this.initCache(true);
-              });
-
-          } else {
-
-            this.initCache(true);
-
-          }
-        })
+        .then(() => this.initCache(true))
         .catch(this.throwError.bind(this));
-
     };
 
     clear();
-
   }
 
   /**
    * Gets the filesystem path of an image.
    * This will return the remote path if anything goes wrong or if the cache service isn't ready yet.
-   * @param imageUrl {string} The remote URL of the image
-   * @returns {Promise<string>} Returns a promise that will always resolve with an image URL
    */
   public getImagePath(imageUrl: string): Promise<string> {
 
@@ -220,14 +174,10 @@ export class IonicMediaLoaderService {
       check();
 
     });
-
   }
 
   /**
    * Add an item to the queue
-   * @param imageUrl
-   * @param resolve
-   * @param reject
    */
   private addItemToQueue(imageUrl: string, resolve, reject): void {
 
@@ -238,12 +188,10 @@ export class IonicMediaLoaderService {
     });
 
     this.processQueue();
-
   }
 
   /**
    * Check if we can process more items in the queue
-   * @returns {boolean}
    */
   private get canProcess(): boolean {
     return (
@@ -306,12 +254,10 @@ export class IonicMediaLoaderService {
         this.throwError(e);
         done();
       });
-
   }
 
   /**
    * Initialize the cache service
-   * @param replace {boolean} Whether to replace the cache directory if it already exists
    */
   private initCache(replace?: boolean): void {
 
@@ -330,23 +276,18 @@ export class IonicMediaLoaderService {
         this.isInit = true;
         this.throwLog('The cache system is ready and running.')
       });
-
   }
 
   /**
    * Adds a file to index.
    * Also deletes any files if they are older than the set maximum cache age.
-   * @param file {FileEntry} File to index
-   * @returns {Promise<any>}
    */
   private addFileToIndex(file: FileEntry): Promise<any> {
+
     return new Promise<any>((resolve, reject) => file.getMetadata(resolve, reject))
       .then(metadata => {
 
-        if(
-          this.config.maxCacheAge > -1
-          && (Date.now() - metadata.modificationTime.getTime()) > this.config.maxCacheAge
-        ) {
+        if(this.config.maxCacheAge > -1 && (Date.now() - metadata.modificationTime.getTime()) > this.config.maxCacheAge) {
           // file age exceeds maximum cache age
           return this.removeFile(file.name);
         } else {
@@ -362,15 +303,12 @@ export class IonicMediaLoaderService {
           });
 
           return Promise.resolve();
-
         }
-
       });
   }
 
   /**
    * Indexes the cache if necessary
-   * @returns {any}
    */
   private indexCache(): Promise<void> {
 
@@ -424,35 +362,21 @@ export class IonicMediaLoaderService {
       };
 
       maintain();
-
     }
-
   }
 
   /**
    * Remove a file
-   * @param file {string} The name of the file to remove
    */
   private removeFile(file: string): Promise<any> {
-    return this.file
-      .removeFile(this.file.cacheDirectory + this.config.cacheDirectoryName, file)
-      .then(() => {
-        if(this.isWKWebView && !this.isIonicWKWebView) {
-          return this.file
-            .removeFile(this.file.tempDirectory + this.config.cacheDirectoryName, file)
-            .catch(() => {
-              // Noop catch. Removing the files from tempDirectory might fail, as it is not persistent.
-            });
-        }
-      });
+    return this.file.removeFile(this.file.cacheDirectory + this.config.cacheDirectoryName, file);
   }
 
   /**
    * Get the local path of a previously cached image if exists
-   * @param url {string} The remote URL of the image
-   * @returns {Promise<string>} Returns a promise that resolves with the local path if exists, or rejects if doesn't exist
    */
   private getCachedImagePath(url: string): Promise<string> {
+
     return new Promise<string>((resolve, reject) => {
 
       // make sure cache is ready
@@ -464,8 +388,7 @@ export class IonicMediaLoaderService {
       const fileName = this.createFileName(url);
 
       // get full path
-      const dirPath = this.file.cacheDirectory + this.config.cacheDirectoryName,
-        tempDirPath = this.file.tempDirectory + this.config.cacheDirectoryName;
+      const dirPath = this.file.cacheDirectory + this.config.cacheDirectoryName;
 
       // check if exists
       this.file.resolveLocalFilesystemUrl(dirPath + '/' + fileName)
@@ -477,8 +400,7 @@ export class IonicMediaLoaderService {
             // read the file as data url and return the base64 string.
             // should always be successful as the existence of the file
             // is alreay ensured
-            this.file
-              .readAsDataURL(dirPath, fileName)
+            this.file.readAsDataURL(dirPath, fileName)
               .then((base64: string) => {
                 base64 = base64.replace('data:null', 'data:*/*');
                 resolve(base64);
@@ -493,15 +415,14 @@ export class IonicMediaLoaderService {
           }
         })
         .catch(reject); // file doesn't exist
-
     });
   }
 
   /**
    * Throws a console error if debug mode is enabled
-   * @param args {any[]} Error message
    */
   private throwError(...args: any[]): void {
+
     if(this.config.debugMode) {
       args.unshift('MediaLoader Error: ');
       console.error.apply(console, args);
@@ -510,9 +431,9 @@ export class IonicMediaLoaderService {
 
   /**
    * Throws a console warning if debug mode is enabled
-   * @param args {any[]} Error message
    */
   private throwWarning(...args: any[]): void {
+
     if(this.config.debugMode) {
       args.unshift('MediaLoader Warning: ');
       console.warn.apply(console, args);
@@ -521,9 +442,9 @@ export class IonicMediaLoaderService {
 
   /**
    * Throws a console warning if debug mode is enabled
-   * @param args {any[]} Error message
    */
   private throwLog(...args: any[]): void {
+
     if(this.config.debugMode) {
       args.unshift('MediaLoader Log: ');
       console.log.apply(console, args);
@@ -532,8 +453,6 @@ export class IonicMediaLoaderService {
 
   /**
    * Check if the cache directory exists
-   * @param directory {string} The directory to check. Either this.file.tempDirectory or this.file.cacheDirectory
-   * @returns {Promise<boolean|FileError>} Returns a promise that resolves if exists, and rejects if it doesn't
    */
   private cacheDirectoryExists(directory: string): Promise<boolean> {
     return this.file.checkDir(directory, this.config.cacheDirectoryName);
@@ -541,13 +460,10 @@ export class IonicMediaLoaderService {
 
   /**
    * Create the cache directories
-   * @param replace {boolean} override directory if exists
-   * @returns {Promise<DirectoryEntry|FileError>} Returns a promise that resolves if the directories were created, and rejects on error
    */
   private createCacheDirectory(replace: boolean = false): Promise<any> {
-    let cacheDirectoryPromise: Promise<any>,
-      tempDirectoryPromise: Promise<any>;
 
+    let cacheDirectoryPromise: Promise<any>;
 
     if(replace) {
       // create or replace the cache directory
@@ -559,27 +475,11 @@ export class IonicMediaLoaderService {
         .catch(() => this.file.createDir(this.file.cacheDirectory, this.config.cacheDirectoryName, false));
     }
 
-    if(this.isWKWebView && !this.isIonicWKWebView) {
-      if(replace) {
-        // create or replace the temp directory
-        tempDirectoryPromise = this.file.createDir(this.file.tempDirectory, this.config.cacheDirectoryName, replace);
-      } else {
-        // check if the temp directory exists.
-        // if it does not exist create it!
-        tempDirectoryPromise = this.cacheDirectoryExists(this.file.tempDirectory)
-          .catch(() => this.file.createDir(this.file.tempDirectory, this.config.cacheDirectoryName, false));
-      }
-    } else {
-      tempDirectoryPromise = Promise.resolve();
-    }
-
-    return Promise.all([cacheDirectoryPromise, tempDirectoryPromise]);
+    return cacheDirectoryPromise;
   }
 
   /**
    * Creates a unique file name out of the URL
-   * @param url {string} URL of the file
-   * @returns {string} Unique file name
    */
   private createFileName(url: string): string {
     // hash the url to get a unique file name
@@ -588,10 +488,9 @@ export class IonicMediaLoaderService {
 
   /**
    * Converts a string to a unique 32-bit int
-   * @param string {string} string to hash
-   * @returns {number} 32-bit int
    */
   private hashString(string: string): number {
+
     let hash = 0,
       char;
     if(string.length === 0) return hash;
@@ -605,11 +504,9 @@ export class IonicMediaLoaderService {
 
   /**
    * extract extension from filename or url
-   *
-   * @param filename
-   * @returns {string}
    */
   private getExtensionFromFileName(filename) {
     return filename.substr((~-filename.lastIndexOf(".") >>> 0) + 1) || this.config.fallbackFileNameCachedExtension;
   }
+
 }
