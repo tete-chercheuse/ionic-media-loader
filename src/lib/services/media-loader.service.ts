@@ -3,6 +3,8 @@ import { File, FileEntry, FileError, DirectoryEntry } from '@ionic-native/file/n
 import { FileTransfer, FileTransferObject } from '@ionic-native/file-transfer/ngx';
 import { Platform } from '@ionic/angular';
 
+import { IonicMediaLoaderConfig } from "../media-loader.config";
+
 interface IndexItem {
   name: string;
   modificationTime: Date;
@@ -21,7 +23,7 @@ export class IonicMediaLoaderService {
   /**
    * Module configuration
    */
-  public config = {
+  public static config: IonicMediaLoaderConfig = {
     debugMode: true,
     concurrency: 5,
     maxCacheSize: -1,
@@ -97,7 +99,7 @@ export class IonicMediaLoaderService {
   }
 
   private get shouldIndex(): boolean {
-    return (this.config.maxCacheAge > -1) || (this.config.maxCacheSize > -1);
+    return (IonicMediaLoaderService.config.maxCacheAge > -1) || (IonicMediaLoaderService.config.maxCacheSize > -1);
   }
 
   private get pluginsInstalled(): boolean {
@@ -129,7 +131,7 @@ export class IonicMediaLoaderService {
       // pause any operations
       this.isInit = false;
 
-      this.file.removeRecursively(this.file.cacheDirectory, this.config.cacheDirectoryName)
+      this.file.removeRecursively(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName)
         .then(() => this.initCache(true))
         .catch(this.throwError.bind(this));
     };
@@ -236,9 +238,9 @@ export class IonicMediaLoaderService {
       this.processQueue();
     };
 
-    const localPath = this.file.cacheDirectory + this.config.cacheDirectoryName + '/' + this.createFileName(currentItem.imageUrl);
+    const localPath = this.file.cacheDirectory + IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.imageUrl);
 
-    transfer.download(currentItem.imageUrl, localPath, Boolean(this.config.fileTransferOptions.trustAllHosts), this.config.fileTransferOptions)
+    transfer.download(currentItem.imageUrl, localPath, Boolean(IonicMediaLoaderService.config.fileTransferOptions.trustAllHosts), IonicMediaLoaderService.config.fileTransferOptions)
       .then((file: FileEntry) => {
         if(this.shouldIndex) {
           this.addFileToIndex(file).then(this.maintainCacheSize.bind(this));
@@ -261,7 +263,7 @@ export class IonicMediaLoaderService {
    */
   private initCache(replace?: boolean): void {
 
-    this.concurrency = this.config.concurrency;
+    this.concurrency = IonicMediaLoaderService.config.concurrency;
 
     // create cache directories if they do not exist
     this.createCacheDirectory(replace)
@@ -287,7 +289,7 @@ export class IonicMediaLoaderService {
     return new Promise<any>((resolve, reject) => file.getMetadata(resolve, reject))
       .then(metadata => {
 
-        if(this.config.maxCacheAge > -1 && (Date.now() - metadata.modificationTime.getTime()) > this.config.maxCacheAge) {
+        if(IonicMediaLoaderService.config.maxCacheAge > -1 && (Date.now() - metadata.modificationTime.getTime()) > IonicMediaLoaderService.config.maxCacheAge) {
           // file age exceeds maximum cache age
           return this.removeFile(file.name);
         } else {
@@ -317,7 +319,7 @@ export class IonicMediaLoaderService {
 
     this.cacheIndex = [];
 
-    return this.file.listDir(this.file.cacheDirectory, this.config.cacheDirectoryName)
+    return this.file.listDir(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName)
       .then(files => Promise.all(files.map(this.addFileToIndex.bind(this))))
       .then(() => {
         // Sort items by date. Most recent to oldest.
@@ -338,10 +340,10 @@ export class IonicMediaLoaderService {
    */
   private maintainCacheSize(): void {
 
-    if(this.config.maxCacheSize > -1 && this.indexed) {
+    if(IonicMediaLoaderService.config.maxCacheSize > -1 && this.indexed) {
 
       const maintain = () => {
-        if(this.currentCacheSize > this.config.maxCacheSize) {
+        if(this.currentCacheSize > IonicMediaLoaderService.config.maxCacheSize) {
 
           // called when item is done processing
           const next: Function = () => {
@@ -369,7 +371,7 @@ export class IonicMediaLoaderService {
    * Remove a file
    */
   private removeFile(file: string): Promise<any> {
-    return this.file.removeFile(this.file.cacheDirectory + this.config.cacheDirectoryName, file);
+    return this.file.removeFile(this.file.cacheDirectory + IonicMediaLoaderService.config.cacheDirectoryName, file);
   }
 
   /**
@@ -388,14 +390,14 @@ export class IonicMediaLoaderService {
       const fileName = this.createFileName(url);
 
       // get full path
-      const dirPath = this.file.cacheDirectory + this.config.cacheDirectoryName;
+      const dirPath = this.file.cacheDirectory + IonicMediaLoaderService.config.cacheDirectoryName;
 
       // check if exists
       this.file.resolveLocalFilesystemUrl(dirPath + '/' + fileName)
         .then((fileEntry: FileEntry) => {
           // file exists in cache
 
-          if(this.config.imageReturnType === 'base64') {
+          if(IonicMediaLoaderService.config.imageReturnType === 'base64') {
 
             // read the file as data url and return the base64 string.
             // should always be successful as the existence of the file
@@ -407,7 +409,7 @@ export class IonicMediaLoaderService {
               })
               .catch(reject);
 
-          } else if(this.config.imageReturnType === 'uri') {
+          } else if(IonicMediaLoaderService.config.imageReturnType === 'uri') {
 
             // return native path
             resolve((<any>window).Ionic.WebView.convertFileSrc(<string>fileEntry.nativeURL));
@@ -423,7 +425,7 @@ export class IonicMediaLoaderService {
    */
   private throwError(...args: any[]): void {
 
-    if(this.config.debugMode) {
+    if(IonicMediaLoaderService.config.debugMode) {
       args.unshift('MediaLoader Error: ');
       console.error.apply(console, args);
     }
@@ -434,7 +436,7 @@ export class IonicMediaLoaderService {
    */
   private throwWarning(...args: any[]): void {
 
-    if(this.config.debugMode) {
+    if(IonicMediaLoaderService.config.debugMode) {
       args.unshift('MediaLoader Warning: ');
       console.warn.apply(console, args);
     }
@@ -445,7 +447,7 @@ export class IonicMediaLoaderService {
    */
   private throwLog(...args: any[]): void {
 
-    if(this.config.debugMode) {
+    if(IonicMediaLoaderService.config.debugMode) {
       args.unshift('MediaLoader Log: ');
       console.log.apply(console, args);
     }
@@ -455,7 +457,7 @@ export class IonicMediaLoaderService {
    * Check if the cache directory exists
    */
   private cacheDirectoryExists(directory: string): Promise<boolean> {
-    return this.file.checkDir(directory, this.config.cacheDirectoryName);
+    return this.file.checkDir(directory, IonicMediaLoaderService.config.cacheDirectoryName);
   }
 
   /**
@@ -467,12 +469,12 @@ export class IonicMediaLoaderService {
 
     if(replace) {
       // create or replace the cache directory
-      cacheDirectoryPromise = this.file.createDir(this.file.cacheDirectory, this.config.cacheDirectoryName, replace);
+      cacheDirectoryPromise = this.file.createDir(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName, replace);
     } else {
       // check if the cache directory exists.
       // if it does not exist create it!
       cacheDirectoryPromise = this.cacheDirectoryExists(this.file.cacheDirectory)
-        .catch(() => this.file.createDir(this.file.cacheDirectory, this.config.cacheDirectoryName, false));
+        .catch(() => this.file.createDir(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName, false));
     }
 
     return cacheDirectoryPromise;
@@ -506,7 +508,7 @@ export class IonicMediaLoaderService {
    * extract extension from filename or url
    */
   private getExtensionFromFileName(filename) {
-    return filename.substr((~-filename.lastIndexOf(".") >>> 0) + 1) || this.config.fallbackFileNameCachedExtension;
+    return filename.substr((~-filename.lastIndexOf(".") >>> 0) + 1) || IonicMediaLoaderService.config.fallbackFileNameCachedExtension;
   }
 
 }

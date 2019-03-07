@@ -6,6 +6,7 @@ import { FileTransfer } from '@ionic-native/file-transfer/ngx';
 
 import { IonicMediaLoaderDirective } from './directives/media-loader.directive';
 import { IonicMediaLoaderService } from "./services/media-loader.service";
+import { IonicMediaLoaderConfig } from "./media-loader.config";
 
 
 @NgModule({
@@ -26,7 +27,12 @@ import { IonicMediaLoaderService } from "./services/media-loader.service";
   ],
 })
 export class IonicMediaLoaderModule {
-  static forRoot(): ModuleWithProviders {
+
+  public static config(config: IonicMediaLoaderConfig) {
+    IonicMediaLoaderService.config = { ...IonicMediaLoaderService.config, ...config };
+  }
+
+  public static forRoot(): ModuleWithProviders {
     return {
       ngModule: IonicMediaLoaderModule,
     };
