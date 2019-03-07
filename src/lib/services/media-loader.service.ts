@@ -24,7 +24,7 @@ export class IonicMediaLoaderService {
    * Module configuration
    */
   public static config: IonicMediaLoaderConfig = {
-    debugMode: true,
+    debugMode: false,
     concurrency: 5,
     maxCacheSize: -1,
     maxCacheAge: -1,
