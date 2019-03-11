@@ -7,6 +7,7 @@ import { IonicMediaLoaderService } from '../services/media-loader.service';
 export class IonicMediaLoaderDirective implements OnInit, OnChanges {
 
   @Input('loadMedia') targetSource: string;
+  @Input('fallbackMedia') fallbackMedia: string = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
   @Output() loaded: EventEmitter<any>;
 
   private readonly element;
@@ -30,41 +31,44 @@ export class IonicMediaLoaderDirective implements OnInit, OnChanges {
 
     this.setLoadingStyle(this.element);
 
+    let src: string;
+
     try {
 
-      const src = await this.mediaLoader.preload(this.targetSource);
-
-      if(this.isImg || !this.isVideo || !this.isSource) {
-
-        this.setSrc(this.element, 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
-
-        const downloadingImage = new Image();
-
-        downloadingImage.onload = () => {
-          this.setSrc(this.element, src);
-          this.setLoadedStyle(this.element);
-          this.loaded.next('loaded');
-        }
-
-        downloadingImage.src = src;
-
-      } else if(this.isVideo || this.isSource) {
-
-        this.setSrc(this.element, src);
-
-        const video = (this.isSource) ? this.element.parentElement : this.element;
-
-        video.addEventListener('canplaythrough', () => {
-          this.setLoadedStyle(this.element)
-          this.loaded.next('loaded');
-        }, false);
-
-      }
+      src = await this.mediaLoader.preload(this.targetSource);
 
     } catch(error) {
-      console.error(error);
+
+      src = this.fallbackMedia;
+
     }
 
+    if(this.isImg || !this.isVideo || !this.isSource) {
+
+      this.setSrc(this.element, 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==');
+
+      const downloadingImage = new Image();
+
+      downloadingImage.onload = () => {
+        this.setSrc(this.element, src);
+        this.setLoadedStyle(this.element);
+        this.loaded.next('loaded');
+      }
+
+      downloadingImage.src = src;
+
+    } else if(this.isVideo || this.isSource) {
+
+      this.setSrc(this.element, src);
+
+      const video = (this.isSource) ? this.element.parentElement : this.element;
+
+      video.addEventListener('canplaythrough', () => {
+        this.setLoadedStyle(this.element)
+        this.loaded.next('loaded');
+      }, false);
+
+    }
   }
 
   public async ngOnChanges() {
