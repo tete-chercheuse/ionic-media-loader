@@ -50,7 +50,7 @@ export class IonicMediaLoaderService {
    * Indicates if this service is initialized.
    * This service is initialized once all the setup is done.
    */
-  private isWeb = false;
+  private cacheDisabled = false;
 
   /**
    * Number of concurrent requests allowed
@@ -75,9 +75,9 @@ export class IonicMediaLoaderService {
 
     this.platform.ready().then(() => {
 
-      this.isWeb = (!this.platform.is('cordova') && !this.platform.is('capacitor'));
+      this.cacheDisabled = (!this.platform.is('cordova') && !this.platform.is('capacitor')) || (typeof Downloader === 'undefined');
 
-      if(this.isWeb) {
+      if(this.cacheDisabled) {
         // we are running on a browser, or using livereload
         // plugin will not function in this case
         this.isInit = true;
@@ -551,7 +551,7 @@ export class IonicMediaLoaderService {
       }
 
       // if we're running with livereload, ignore cache and call the resource from it's URL
-      if(this.isWeb) {
+      if(this.cacheDisabled) {
         return resolve(url);
       }
 
