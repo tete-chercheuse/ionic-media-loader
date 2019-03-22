@@ -697,7 +697,7 @@ export class IonicMediaLoaderService {
 
     if(IonicMediaLoaderService.config.debugMode) {
       args.unshift('MediaLoader Error: ');
-      this.throwError.apply(console, args);
+      console.error.apply(console, args);
     }
   }
 
