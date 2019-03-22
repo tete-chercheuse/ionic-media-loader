@@ -358,7 +358,7 @@ export class IonicMediaLoaderService {
             this.maintainCacheSize();
           }
 
-          await this.addFileToIndex(fileName);
+          await this.addFileToIndex(IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.mediaUrl));
 
           const finalUri = await this.getCachedMediaPath(currentItem.mediaUrl);
 
