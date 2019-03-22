@@ -131,7 +131,7 @@ export class IonicMediaLoaderService {
         directory: this.fileCacheDirectory
       });
 
-      return file.uri;
+      return window.Ionic.WebView.convertFileSrc(file.uri);
 
     } catch(e) {
       this.throwError("File does not exists.", e);
@@ -350,7 +350,7 @@ export class IonicMediaLoaderService {
             fileName: this.createFileName(currentItem.mediaUrl)
           });
 
-          const media = await downloader.start({ id: data.value });
+          const media = await downloader.start({ id: data.value }, (progress) => this.throwLog(progress));
 
           this.throwLog(media);
 
@@ -375,12 +375,17 @@ export class IonicMediaLoaderService {
     } else {
 
       // Prevented same Media from loading at the same time
-      this.currentlyProcessing[currentItem.mediaUrl].then(() => {
+      this.currentlyProcessing[currentItem.mediaUrl].then(async() => {
 
-        this.getCachedMediaPath(currentItem.mediaUrl).then(localUrl => {
+        try {
+
+          const localUrl = await this.getCachedMediaPath(currentItem.mediaUrl);
           currentItem.resolve(localUrl);
-        });
-        done();
+          done();
+
+        } catch(e) {
+          this.throwError(e);
+        }
 
       }).catch(e => {
 
@@ -475,7 +480,7 @@ export class IonicMediaLoaderService {
       if(files.files.length !== 0) {
 
         this.throwLog("Folder not empty, adding content to the index...");
-        
+
         let promises = files.files.map(async file => {
 
           this.throwLog("File in folder: ", file);
@@ -483,7 +488,7 @@ export class IonicMediaLoaderService {
           const fileName = file.lastIndexOf("/");
 
           try {
-            await this.addFileToIndex(IonicMediaLoaderService.config.cacheDirectoryName + '/' + file.substr(fileName));
+            await this.addFileToIndex(IonicMediaLoaderService.config.cacheDirectoryName + file.substr(fileName));
           } catch(e) {
             this.throwError(e);
           }
