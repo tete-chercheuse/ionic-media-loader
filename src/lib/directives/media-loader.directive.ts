@@ -83,8 +83,11 @@ export class IonicMediaLoaderDirective implements OnInit, OnChanges {
     }
   }
 
-  public async ngOnChanges() {
-    await this.ngOnInit();
+  public async ngOnChanges(changes) {
+
+    if(changes && changes.targetSource) {
+      await this.ngOnInit();
+    }
   }
 
   private setSrc(element: HTMLElement, imagePath: string) {
