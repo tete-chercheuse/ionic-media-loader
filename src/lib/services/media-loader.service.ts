@@ -475,9 +475,19 @@ export class IonicMediaLoaderService {
       if(files.files.length !== 0) {
 
         this.throwLog("Folder not empty, adding content to the index...");
-        files.files.map(e => this.throwLog(e));
-        let promises = files.files.map(this.addFileToIndex, this);
-        await Promise.all(promises);
+        
+        let promises = files.files.map(async file => {
+
+          this.throwLog("File in folder: ", file);
+
+          const fileName = file.lastIndexOf("/");
+
+          try {
+            await this.addFileToIndex(IonicMediaLoaderService.config.cacheDirectoryName + '/' + file.substr(fileName));
+          } catch(e) {
+            this.throwError(e);
+          }
+        });
       }
 
     }).then(() => {
