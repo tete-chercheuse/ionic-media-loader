@@ -355,7 +355,7 @@ export class IonicMediaLoaderService {
           this.throwLog(media);
 
           if(this.isCacheSpaceExceeded) {
-            this.maintainCacheSize();
+            await this.maintainCacheSize();
           }
 
           await this.addFileToIndex(IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.mediaUrl));
@@ -365,7 +365,7 @@ export class IonicMediaLoaderService {
           currentItem.resolve(finalUri);
           resolve();
           done();
-          this.maintainCacheSize();
+          await this.maintainCacheSize();
 
         } catch(e) {
           error(e);
@@ -388,11 +388,9 @@ export class IonicMediaLoaderService {
         }
 
       }).catch(e => {
-
         currentItem.reject();
         this.throwError(e);
         done();
-
       });
     }
   }
@@ -413,17 +411,18 @@ export class IonicMediaLoaderService {
 
     this.throwLog("Initializing cache...");
 
-    // create cache directories if they do not exist
-    this.createCacheDirectory(replace)
-      .then(async() => await this.indexCache())
-      .then(() => {
-        this.isCacheReady = true;
-        this.isInit = true;
-      })
-      .catch(e => {
-        this.throwError('Cannot create storage directory.', e);
-        this.isInit = true;
-      });
+    try {
+
+      // create cache directory if it does not exist
+      await this.createCacheDirectory(replace);
+      await this.indexCache();
+      this.isCacheReady = true;
+      this.isInit = true;
+
+    } catch(e) {
+      this.throwError('Cannot create storage directory.', e);
+      this.isInit = true;
+    }
   }
 
   /**
@@ -515,36 +514,44 @@ export class IonicMediaLoaderService {
    * It checks the cache size and ensures that it doesn't exceed the maximum cache size set in the config.
    * If the limit is reached, it will delete old medias to create free space.
    */
-  private maintainCacheSize(): void {
+  private async maintainCacheSize(): Promise<void> {
 
     if(IonicMediaLoaderService.config.maxCacheSize > -1 && this.indexed) {
 
-      const maintain = () => {
+      const maintain = async() => {
 
         if(this.currentCacheSize > IonicMediaLoaderService.config.maxCacheSize) {
 
           // called when item is done processing
-          const next: Function = () => {
+          const next: Function = async() => {
             this.currentCacheSize -= file.size;
-            maintain();
+            await maintain();
           };
 
           // grab the first item in index since it's the oldest one
           const file: IndexItem = this.cacheIndex.splice(0, 1)[0];
 
           if(typeof file === 'undefined') {
-            return maintain();
+            return await maintain();
           }
 
-          // delete the file then process next file if necessary
-          Filesystem.deleteFile({
-            path: IonicMediaLoaderService.config.cacheDirectoryName + '/' + file,
-            directory: this.fileCacheDirectory
-          }).then(() => next()).catch(() => next()); // ignore errors, nothing we can do about it
+          try {
+
+            // delete the file then process next file if necessary
+            await Filesystem.deleteFile({
+              path: IonicMediaLoaderService.config.cacheDirectoryName + '/' + file,
+              directory: this.fileCacheDirectory
+            });
+
+            await next();
+
+          } catch {
+            await next(); // ignore errors, nothing we can do about it
+          }
         }
       };
 
-      maintain();
+      await maintain();
     }
   }
 
@@ -581,7 +588,7 @@ export class IonicMediaLoaderService {
    */
   private async createCacheDirectory(replace: boolean = false): Promise<any> {
 
-    return new Promise<any>((resolve, reject) => {
+    return new Promise<any>(async(resolve, reject) => {
 
       this.throwLog("Checking storage directory status...");
 
@@ -589,50 +596,57 @@ export class IonicMediaLoaderService {
 
         this.throwLog("Attempting to delete previous directory.");
 
-        Filesystem.rmdir({
-          path: IonicMediaLoaderService.config.cacheDirectoryName,
-          directory: this.fileCacheDirectory
-        }).then(() => {
+        try {
+
+          await Filesystem.rmdir({
+            path: IonicMediaLoaderService.config.cacheDirectoryName,
+            directory: this.fileCacheDirectory
+          });
 
           this.throwLog("Deletion done. Attempting to create new one...");
 
-          Filesystem.mkdir({
+          await Filesystem.mkdir({
             path: IonicMediaLoaderService.config.cacheDirectoryName,
             directory: this.fileCacheDirectory,
             createIntermediateDirectories: false
-          }).then(() => {
-            this.throwLog("Creation done.");
-            resolve();
-          }).catch(e => {
-            this.throwError("Cannot create directory (replace case).", e);
-            reject(e);
           });
 
-        }).catch(e => {
-          this.throwError("Cannot delete directory (replace case).", e);
-          reject(e)
-        });
+          this.throwLog("Creation done.");
+          resolve();
+
+        } catch(e) {
+          this.throwError("Cannot create or delete directory (replace case).", e);
+          reject(e);
+        }
 
       } else {
         // check if the cache directory exists.
         // if it does not exist create it!
-        this.checkDir(IonicMediaLoaderService.config.cacheDirectoryName)
-          .then(() => {
-            this.throwLog("Directory already exists, nothing more to do.");
-            resolve();
-          })
-          .catch(() => {
 
-            Filesystem.mkdir({
+        try {
+
+          await this.checkDir(IonicMediaLoaderService.config.cacheDirectoryName);
+
+          this.throwLog("Directory already exists, nothing more to do.");
+          resolve();
+
+        } catch {
+
+          try {
+
+            await Filesystem.mkdir({
               path: IonicMediaLoaderService.config.cacheDirectoryName,
               directory: this.fileCacheDirectory,
               createIntermediateDirectories: true
-            }).then(result => resolve()).catch(e => {
-              this.throwError("Cannot create directory.", e);
-              reject(e);
             });
 
-          });
+            resolve();
+
+          } catch(e) {
+            this.throwError("Cannot create directory.", e);
+            reject(e);
+          }
+        }
       }
     });
   }
