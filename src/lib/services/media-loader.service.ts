@@ -335,46 +335,41 @@ export class IonicMediaLoaderService {
           this.processQueue();
         }
 
-        const fileName = IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.mediaUrl);
+        try {
 
-        const downloader = new Downloader();
-
-        const data = await downloader.createDownload({
-          url: currentItem.mediaUrl,
-          headers: IonicMediaLoaderService.config.httpHeaders,
-          path: fileName
-        });
-
-        const imageDownloaderId = data.value;
-
-        downloader
-          .start({ id: imageDownloaderId }, (progressData) => {
-            console.log(`Progress : ${progressData.value}%`);
-            console.log(`Current Size : ${progressData.currentSize}%`);
-            console.log(`Total Size : ${progressData.totalSize}%`);
-            console.log(`Download Speed in bytes : ${progressData.speed}%`);
-          })
-          .then((completed) => {
-            console.log(`Image : ${completed.path}`);
-
-            if(this.isCacheSpaceExceeded) {
-              this.maintainCacheSize();
-            }
-
-            this.addFileToIndex(fileName).then(() => {
-
-              this.getCachedMediaPath(currentItem.mediaUrl).then((localUrl) => {
-                currentItem.resolve(localUrl);
-                resolve();
-                done();
-                this.maintainCacheSize();
-              });
-            });
-          })
-          .catch(error => {
-            console.log(error.message);
+          const path = await Filesystem.getUri({
+            path: IonicMediaLoaderService.config.cacheDirectoryName,
+            directory: this.fileCacheDirectory
           });
 
+          const downloader = new Downloader();
+
+          const data = await downloader.createDownload({
+            url: currentItem.mediaUrl,
+            path: path.uri,
+            fileName: this.createFileName(currentItem.mediaUrl)
+          });
+
+          const media = await downloader.start({ id: data.value });
+
+          this.throwLog(media);
+
+          if(this.isCacheSpaceExceeded) {
+            this.maintainCacheSize();
+          }
+
+          await this.addFileToIndex(fileName);
+
+          const finalUri = await this.getCachedMediaPath(currentItem.mediaUrl);
+
+          currentItem.resolve(finalUri);
+          resolve();
+          done();
+          this.maintainCacheSize();
+
+        } catch(e) {
+          error(e);
+        }
       });
 
     } else {
