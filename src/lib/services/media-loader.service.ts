@@ -121,6 +121,11 @@ export class IonicMediaLoaderService {
 
     try {
 
+      const contents = await Filesystem.readFile({
+        path: path,
+        directory: this.fileCacheDirectory
+      });
+
       const file = await Filesystem.getUri({
         path: path,
         directory: this.fileCacheDirectory
