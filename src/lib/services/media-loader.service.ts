@@ -131,7 +131,7 @@ export class IonicMediaLoaderService {
         directory: this.fileCacheDirectory
       });
 
-      return window.Ionic.WebView.convertFileSrc(file.uri);
+      return (<any>window).Ionic.WebView.convertFileSrc(file.uri);
 
     } catch(e) {
       this.throwError("File does not exists.", e);
