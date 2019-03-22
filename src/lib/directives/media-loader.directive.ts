@@ -35,7 +35,7 @@ export class IonicMediaLoaderDirective implements OnInit, OnChanges {
 
     try {
 
-      src = await this.mediaLoader.preload(this.targetSource);
+      src = await this.mediaLoader.getMedia(this.targetSource);
 
     } catch(error) {
 
