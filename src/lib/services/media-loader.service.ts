@@ -351,13 +351,13 @@ export class IonicMediaLoaderService {
           const data = await this.http.get(currentItem.mediaUrl, {}, {});
           const fileData = await this.convertBlobToBase64(data.data.blob());
 
-          await Filesystem.writeFile({
+          const writtenFile = await Filesystem.writeFile({
             path: fileName,
             data: fileData,
             directory: this.fileCacheDirectory
           });
 
-          this.throwLog(media);
+          this.throwLog(data, fileData, writtenFile);
 
           if(this.isCacheSpaceExceeded) {
             await this.maintainCacheSize();
@@ -711,7 +711,7 @@ export class IonicMediaLoaderService {
       const reader = new FileReader;
       reader.onerror = reject;
       reader.onload = () => {
-        resolve(reader.result);
+        resolve(reader.result as string);
       };
       reader.readAsDataURL(blob);
     });
