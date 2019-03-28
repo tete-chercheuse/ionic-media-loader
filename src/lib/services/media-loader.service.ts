@@ -102,13 +102,6 @@ export class IonicMediaLoaderService {
 
     try {
 
-      const directory = await Filesystem.stat({
-        path: path,
-        directory: this.fileCacheDirectory
-      });
-
-      this.throwLog(directory);
-
       const files = await Filesystem.readdir({
         path: path,
         directory: this.fileCacheDirectory
@@ -117,7 +110,8 @@ export class IonicMediaLoaderService {
       return files.files;
 
     } catch(e) {
-      this.throwError("Directory does not exists.", e);
+      this.throwError('Directory does not exists.', e);
+      return Promise.reject('Directory does not exists.');
     }
   }
 
@@ -141,7 +135,8 @@ export class IonicMediaLoaderService {
       return (<any>window).Ionic.WebView.convertFileSrc(file.uri);
 
     } catch(e) {
-      this.throwError("File does not exists.", e);
+      this.throwError('File does not exists.', e);
+      return Promise.reject('File does not exists.');
     }
   }
 
@@ -171,7 +166,8 @@ export class IonicMediaLoaderService {
         await this.initCache(true);
 
       } catch(e) {
-        this.throwError('Failed to delete the file.', e)
+        this.throwError('Failed to delete the file.', e);
+        return Promise.reject('Failed to delete the file.');
       }
     }
 
@@ -204,7 +200,8 @@ export class IonicMediaLoaderService {
         await this.initCache(true);
 
       } catch(e) {
-        this.throwError('Failed to delete the file.', e)
+        this.throwError('Failed to delete the directory.', e);
+        return Promise.reject('Failed to delete the directory.');
       }
     }
 
@@ -223,19 +220,19 @@ export class IonicMediaLoaderService {
 
     return new Promise<string>(async(resolve, reject) => {
 
-      this.throwLog("Searching media.");
+      this.throwLog('Searching media.');
 
       const getFile = async() => {
 
         if(this.isMediaUrlRelative(mediaUrl)) {
-          this.throwLog("Media found in application.");
+          this.throwLog('Media found in application.');
           resolve(mediaUrl);
         } else {
 
           try {
 
             const uri = await this.getCachedMediaPath(mediaUrl);
-            this.throwLog("Media found in cache.");
+            this.throwLog('Media found in cache.');
             resolve(uri)
           } catch {
             // media doesn't exist in cache, lets fetch it and save it
@@ -255,7 +252,7 @@ export class IonicMediaLoaderService {
             resolve(mediaUrl);
           }
         } else {
-          this.throwWarning("Waiting for the env to be ready (cache + folder)...");
+          this.throwWarning('Waiting for the cache system to be ready...');
           setTimeout(async() => await check(), 250);
         }
       };
@@ -426,9 +423,14 @@ export class IonicMediaLoaderService {
       this.isCacheReady = true;
       this.isInit = true;
 
+      return Promise.resolve();
+
     } catch(e) {
+
       this.throwError('Cannot create storage directory.', e);
       this.isInit = true;
+
+      return Promise.reject();
     }
   }
 
@@ -464,8 +466,12 @@ export class IonicMediaLoaderService {
           size: metadata.size,
         });
       }
+
+      return Promise.resolve();
+
     } catch(e) {
       this.throwError(e);
+      return Promise.reject();
     }
   }
 
@@ -476,7 +482,7 @@ export class IonicMediaLoaderService {
 
     this.cacheIndex = [];
 
-    this.throwLog("Cache created. Indexing it...");
+    this.throwLog('Cache created. Indexing it...');
 
     return Filesystem.readdir({
       path: IonicMediaLoaderService.config.cacheDirectoryName,
@@ -485,18 +491,19 @@ export class IonicMediaLoaderService {
 
       if(files.files.length !== 0) {
 
-        this.throwLog("Folder not empty, adding content to the index...");
+        this.throwLog('Folder not empty, adding content to the index...');
 
         let promises = files.files.map(async file => {
 
-          this.throwLog("File in folder: ", file);
+          this.throwLog('File in folder: ', file);
 
-          const fileName = file.lastIndexOf("/");
+          const fileName = file.lastIndexOf('/');
 
           try {
             await this.addFileToIndex(IonicMediaLoaderService.config.cacheDirectoryName + file.substr(fileName));
           } catch(e) {
             this.throwError(e);
+            return Promise.reject();
           }
         });
       }
@@ -581,7 +588,7 @@ export class IonicMediaLoaderService {
 
       try {
         const uri = await this.checkMedia(IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(url));
-        this.throwLog("File exists in storage, return the uri.");
+        this.throwLog('File exists in storage, return the uri.');
         resolve(uri);
       } catch {
         this.throwLog("File doesn't exist, go process it in queue.");
@@ -597,11 +604,11 @@ export class IonicMediaLoaderService {
 
     return new Promise<any>(async(resolve, reject) => {
 
-      this.throwLog("Checking storage directory status...");
+      this.throwLog('Checking storage directory status...');
 
       if(replace) {
 
-        this.throwLog("Attempting to delete previous directory.");
+        this.throwLog('Attempting to delete previous directory.');
 
         try {
 
@@ -610,7 +617,7 @@ export class IonicMediaLoaderService {
             directory: this.fileCacheDirectory
           });
 
-          this.throwLog("Deletion done. Attempting to create new one...");
+          this.throwLog('Deletion done. Attempting to create new one...');
 
           await Filesystem.mkdir({
             path: IonicMediaLoaderService.config.cacheDirectoryName,
@@ -618,11 +625,11 @@ export class IonicMediaLoaderService {
             createIntermediateDirectories: false
           });
 
-          this.throwLog("Creation done.");
+          this.throwLog('Creation done.');
           resolve();
 
         } catch(e) {
-          this.throwError("Cannot create or delete directory (replace case).", e);
+          this.throwError('Cannot create or delete directory (replace case).', e);
           reject(e);
         }
 
@@ -634,7 +641,7 @@ export class IonicMediaLoaderService {
 
           await this.checkDir(IonicMediaLoaderService.config.cacheDirectoryName);
 
-          this.throwLog("Directory already exists, nothing more to do.");
+          this.throwLog('Directory already exists, nothing more to do.');
           resolve();
 
         } catch {
@@ -650,7 +657,7 @@ export class IonicMediaLoaderService {
             resolve();
 
           } catch(e) {
-            this.throwError("Cannot create directory.", e);
+            this.throwError('Cannot create directory.', e);
             reject(e);
           }
         }
