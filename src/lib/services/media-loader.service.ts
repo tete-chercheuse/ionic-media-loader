@@ -105,7 +105,7 @@ export class IonicMediaLoaderService {
       // pause any operations
       this.isInit = false;
 
-      this.file.removeRecursively(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName)
+      this.file.removeRecursively(this.file.dataDirectory, IonicMediaLoaderService.config.cacheDirectoryName)
         .then(() => this.initCache(true))
         .catch(this.throwError.bind(this));
     };
@@ -243,7 +243,7 @@ export class IonicMediaLoaderService {
           const data = await this.http.get(currentItem.mediaUrl, {}, {});
           this.throwLog(data);
 
-          const file = await this.file.writeFile(this.file.cacheDirectory + '/' + IonicMediaLoaderService.config.cacheDirectoryName, this.createFileName(currentItem.mediaUrl), data.data);
+          const file = await this.file.writeFile(this.file.dataDirectory + IonicMediaLoaderService.config.cacheDirectoryName, this.createFileName(currentItem.mediaUrl), data.data);
           this.throwLog(file);
 
           if(this.isCacheSpaceExceeded) {
@@ -355,7 +355,7 @@ export class IonicMediaLoaderService {
 
     this.cacheIndex = [];
 
-    return this.file.listDir(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName)
+    return this.file.listDir(this.file.dataDirectory, IonicMediaLoaderService.config.cacheDirectoryName)
       .then(files => Promise.all(files.map(this.addFileToIndex.bind(this))))
       .then(() => {
         // Sort items by date. Most recent to oldest.
@@ -407,7 +407,7 @@ export class IonicMediaLoaderService {
    * Remove a file
    */
   private async removeFile(file: string): Promise<any> {
-    return this.file.removeFile(this.file.cacheDirectory + IonicMediaLoaderService.config.cacheDirectoryName, file);
+    return this.file.removeFile(this.file.dataDirectory + IonicMediaLoaderService.config.cacheDirectoryName, file);
   }
 
   /**
@@ -426,7 +426,7 @@ export class IonicMediaLoaderService {
       const fileName = this.createFileName(url);
 
       // get full path
-      const dirPath = this.file.cacheDirectory + IonicMediaLoaderService.config.cacheDirectoryName;
+      const dirPath = this.file.dataDirectory + IonicMediaLoaderService.config.cacheDirectoryName;
 
       // check if exists
       this.file.resolveLocalFilesystemUrl(dirPath + '/' + fileName)
@@ -472,12 +472,12 @@ export class IonicMediaLoaderService {
 
     if(replace) {
       // create or replace the cache directory
-      cacheDirectoryPromise = this.file.createDir(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName, replace);
+      cacheDirectoryPromise = this.file.createDir(this.file.dataDirectory, IonicMediaLoaderService.config.cacheDirectoryName, replace);
     } else {
       // check if the cache directory exists.
       // if it does not exist create it!
-      cacheDirectoryPromise = this.cacheDirectoryExists(this.file.cacheDirectory)
-        .catch(() => this.file.createDir(this.file.cacheDirectory, IonicMediaLoaderService.config.cacheDirectoryName, false));
+      cacheDirectoryPromise = this.cacheDirectoryExists(this.file.dataDirectory)
+        .catch(() => this.file.createDir(this.file.dataDirectory, IonicMediaLoaderService.config.cacheDirectoryName, false));
     }
 
     return cacheDirectoryPromise;
