@@ -240,10 +240,9 @@ export class IonicMediaLoaderService {
 
         try {
 
-          const data = await this.http.get(currentItem.mediaUrl, {}, {});
-          this.throwLog(data);
+          const path = this.file.dataDirectory + IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.mediaUrl);
 
-          const file = await this.file.writeFile(this.file.dataDirectory + IonicMediaLoaderService.config.cacheDirectoryName, this.createFileName(currentItem.mediaUrl), data.data);
+          const file = await this.http.downloadFile(currentItem.mediaUrl, {}, {}, path);
           this.throwLog(file);
 
           if(this.isCacheSpaceExceeded) {
