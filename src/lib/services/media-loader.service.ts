@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Platform } from '@ionic/angular';
 import { FilesystemDirectory, Plugins } from '@capacitor/core';
-import { Downloader } from 'capacitor-downloader';
+import { HTTP } from '@ionic-native/http/ngx';
 
 import { IonicMediaLoaderConfig } from "../media-loader.config";
 
@@ -71,11 +71,11 @@ export class IonicMediaLoaderService {
   private currentCacheSize = 0;
   private indexed = false;
 
-  constructor(private readonly platform: Platform) {
+  constructor(private readonly platform: Platform, private readonly http: HTTP) {
 
     this.platform.ready().then(() => {
 
-      this.cacheDisabled = (!this.platform.is('cordova') && !this.platform.is('capacitor')) || (typeof Downloader === 'undefined');
+      this.cacheDisabled = ((!this.platform.is('cordova') && !this.platform.is('capacitor')) || !HTTP.installed());
 
       if(this.cacheDisabled) {
         // we are running on a browser, or using livereload
@@ -346,15 +346,16 @@ export class IonicMediaLoaderService {
             directory: this.fileCacheDirectory
           });
 
-          const downloader = new Downloader();
+          const fileName = IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.mediaUrl);
 
-          const data = await downloader.createDownload({
-            url: currentItem.mediaUrl,
-            path: path.uri,
-            fileName: this.createFileName(currentItem.mediaUrl)
+          const data = await this.http.get(currentItem.mediaUrl, {}, {});
+          const fileData = await this.convertBlobToBase64(data.data.blob());
+
+          await Filesystem.writeFile({
+            path: fileName,
+            data: fileData,
+            directory: this.fileCacheDirectory
           });
-
-          const media = await downloader.start({ id: data.value }, (progress) => this.throwLog(progress));
 
           this.throwLog(media);
 
@@ -702,6 +703,18 @@ export class IonicMediaLoaderService {
   private getExtensionFromUrl(url: string): string {
     const urlWitoutParams = url.split(/\#|\?/)[0];
     return (urlWitoutParams.substr((~-urlWitoutParams.lastIndexOf('.') >>> 0) + 1) || IonicMediaLoaderService.config.fallbackFileNameCachedExtension);
+  }
+
+  private convertBlobToBase64(blob: Blob): Promise<string> {
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader;
+      reader.onerror = reject;
+      reader.onload = () => {
+        resolve(reader.result);
+      };
+      reader.readAsDataURL(blob);
+    });
   }
 
   /**
