@@ -8,4 +8,5 @@ export class IonicMediaLoaderConfig {
   httpHeaders?: HttpHeaders;
   fallbackFileNameCachedExtension?: string;
   cacheDirectoryName?: string;
+  imageReturnType?: 'uri' | 'base64';
 }
