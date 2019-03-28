@@ -1,6 +1,6 @@
 {
   "name": "ionic-media-loader",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Ionic Directive and Service to load images in a background thread and cache them for later use",
   "homepage": "http://tete-chercheuse.fr",
   "author": "Tête Chercheuse",
