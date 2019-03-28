@@ -120,7 +120,7 @@ export class IonicMediaLoaderService {
   public getMedia(imageUrl: string): Promise<string> {
 
     if(typeof imageUrl !== 'string' || imageUrl.length <= 0) {
-      return Promise.reject('The image url provided was empty or invalid.');
+      return Promise.reject('The media url provided was empty or invalid.');
     }
 
     return new Promise<string>((resolve, reject) => {
@@ -241,12 +241,10 @@ export class IonicMediaLoaderService {
         try {
 
           const path = this.file.dataDirectory + IonicMediaLoaderService.config.cacheDirectoryName + '/' + this.createFileName(currentItem.mediaUrl);
-
           const file = await this.http.downloadFile(currentItem.mediaUrl, {}, {}, path);
-          this.throwLog(file);
 
           if(this.isCacheSpaceExceeded) {
-            await this.maintainCacheSize();
+            this.maintainCacheSize();
           }
 
           await this.addFileToIndex(file);
@@ -256,7 +254,7 @@ export class IonicMediaLoaderService {
           currentItem.resolve(finalUri);
           resolve();
           done();
-          await this.maintainCacheSize();
+          this.maintainCacheSize();
 
         } catch(e) {
           error(e);
