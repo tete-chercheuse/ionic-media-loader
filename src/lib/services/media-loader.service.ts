@@ -102,6 +102,11 @@ export class IonicMediaLoaderService {
 
     try {
 
+      const dir = await Filesystem.stat({
+        path: path,
+        directory: this.fileCacheDirectory
+      });
+
       const files = await Filesystem.readdir({
         path: path,
         directory: this.fileCacheDirectory
