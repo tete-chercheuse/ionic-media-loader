@@ -12,6 +12,7 @@
         "build": {
           "builder": "@angular-devkit/build-ng-packagr:build",
           "options": {
+            "preserveSymlinks": true,
             "tsConfig": "tsconfig.lib.json",
             "project": "ng-package.json"
           }
