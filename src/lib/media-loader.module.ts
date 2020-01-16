@@ -6,7 +6,7 @@ import { HTTP } from "@ionic-native/http/ngx";
 
 import { IonicMediaLoaderDirective } from './directives/media-loader.directive';
 import { IonicMediaLoaderService } from "./services/media-loader.service";
-import { defaultConfig, IONIC_MEDIA_LOADER_CONFIG, IonicMediaLoaderConfig } from "./media-loader.models";
+import { IONIC_MEDIA_LOADER_CONFIG, IonicMediaLoaderConfig, IonicMediaLoaderConfigProvider, IonicMediaLoaderModuleOptions } from "./media-loader.models";
 
 @NgModule({
   declarations: [
@@ -27,13 +27,18 @@ import { defaultConfig, IONIC_MEDIA_LOADER_CONFIG, IonicMediaLoaderConfig } from
 })
 export class IonicMediaLoaderModule {
 
-  public static forRoot(config: IonicMediaLoaderConfig): ModuleWithProviders {
+  public static forRoot(config?: IonicMediaLoaderModuleOptions): ModuleWithProviders {
     return {
       ngModule: IonicMediaLoaderModule,
       providers: [
         {
           provide: IONIC_MEDIA_LOADER_CONFIG,
-          useValue: { ...defaultConfig, ...config }
+          useValue: config
+        },
+        {
+          provide: IonicMediaLoaderConfig,
+          useFactory: IonicMediaLoaderConfigProvider,
+          deps: [IONIC_MEDIA_LOADER_CONFIG]
         }
       ]
     };
