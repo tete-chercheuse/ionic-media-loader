@@ -108,6 +108,9 @@ export class IonicMediaLoaderService {
     return new Promise<string>((resolve, reject) => {
 
       const getMedia = () => {
+
+        this.throwLog('Searching media : ', imageUrl);
+
         this.getCachedMediaPath(imageUrl)
           .then(resolve)
           .catch(() => {
@@ -414,6 +417,9 @@ export class IonicMediaLoaderService {
       const dirPath = this.file.dataDirectory + this.config.cacheDirectoryName;
 
       // check if exists
+
+      this.throwLog('Check if file exists : ', dirPath + '/' + fileName);
+
       this.file.resolveLocalFilesystemUrl(dirPath + '/' + fileName)
         .then((fileEntry: FileEntry) => {
           // file exists in cache
@@ -466,6 +472,8 @@ export class IonicMediaLoaderService {
       cacheDirectoryPromise = this.cacheDirectoryExists(this.file.dataDirectory)
         .catch(() => this.file.createDir(this.file.dataDirectory, this.config.cacheDirectoryName, false));
     }
+
+    this.throwLog('Cache directory : ', this.file.dataDirectory + '/' + this.config.cacheDirectoryName);
 
     return cacheDirectoryPromise;
   }
