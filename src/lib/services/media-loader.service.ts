@@ -1,9 +1,9 @@
-import { Inject, Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { Platform } from '@ionic/angular';
 import { File, FileEntry } from '@ionic-native/file/ngx';
 import { HTTP } from '@ionic-native/http/ngx';
 
-import { IndexItem, IONIC_MEDIA_LOADER_CONFIG, IonicMediaLoaderConfig, QueueItem } from "../media-loader.models";
+import { IndexItem, IonicMediaLoaderConfig, QueueItem } from "../media-loader.models";
 
 
 @Injectable()
@@ -47,7 +47,7 @@ export class IonicMediaLoaderService {
   private indexed = false;
 
   constructor(
-    @Inject(IONIC_MEDIA_LOADER_CONFIG) private config: IonicMediaLoaderConfig,
+    private readonly config: IonicMediaLoaderConfig,
     private readonly platform: Platform,
     private readonly file: File,
     private readonly http: HTTP,
